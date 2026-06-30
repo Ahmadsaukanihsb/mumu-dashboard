@@ -165,20 +165,8 @@ def adb_detect_kicked_dialog(serial):
     except:
         pass
 
-    # Method 3: proactive dismiss — tap common dialog areas as safety net
-    # (always runs to dismiss any stray dialogs; detection is only from methods 1 & 2)
-    try:
-        for _ in range(3):
-            subprocess.run([adb, '-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_BACK'],
-                capture_output=True, timeout=3)
-            time.sleep(0.3)
-        tap_points = [(540, 960), (540, 500), (540, 1400), (100, 100), (1000, 100)]
-        for x, y in tap_points:
-            subprocess.run([adb, '-s', serial, 'shell', 'input', 'tap', str(x), str(y)],
-                capture_output=True, timeout=3)
-            time.sleep(0.2)
-    except:
-        pass
+    # Method 3: no longer runs proactive tap here — moved to monitor loop
+    # (gate behind in_game check to avoid random clicks while playing)
 
     return False
 
@@ -335,8 +323,8 @@ def monitor_loop():
                         elif not in_game:
                             st['in_game_since'] = 0
 
-                        # Periodic dialog dismiss safety net every 30s
-                        if (now - st.get('last_dismiss_check', 0)) >= 30:
+                        # Periodic dialog dismiss safety net (only when not confirmed in-game)
+                        if not in_game and (now - st.get('last_dismiss_check', 0)) >= 30:
                             st['last_dismiss_check'] = now
                             adb_dismiss_dialogs(serial)
 
