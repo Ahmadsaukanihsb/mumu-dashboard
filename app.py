@@ -165,8 +165,8 @@ def adb_detect_kicked_dialog(serial):
     except:
         pass
 
-    # Method 3: proactive dismiss + check by tapping common dialog areas
-    # If dialog exists, tapping its buttons will dismiss it; we check before/after
+    # Method 3: proactive dismiss — tap common dialog areas as safety net
+    # (always runs to dismiss any stray dialogs; detection is only from methods 1 & 2)
     try:
         for _ in range(3):
             subprocess.run([adb, '-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_BACK'],
@@ -177,7 +177,6 @@ def adb_detect_kicked_dialog(serial):
             subprocess.run([adb, '-s', serial, 'shell', 'input', 'tap', str(x), str(y)],
                 capture_output=True, timeout=3)
             time.sleep(0.2)
-        return True
     except:
         pass
 
