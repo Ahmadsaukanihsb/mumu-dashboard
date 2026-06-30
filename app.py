@@ -137,54 +137,47 @@ def adb_detect_kicked_dialog(serial):
     if not pid:
         return False
 
-    # dumpsys window windows — check for floating dialog overlay from Roblox
+    # Method 1: dumpsys — check floating layer windows from Roblox
     try:
         r = subprocess.run([adb, '-s', serial, 'shell', 'dumpsys', 'window', 'windows'],
             capture_output=True, text=True, timeout=10)
         out = r.stdout.lower()
         if 'com.roblox.client' not in out:
             return False
-        roblox_window_count = 0
-        roblox_floating = 0
         for line in out.split('\n'):
-            if 'com.roblox.client' in line and 'window' in line.lower() and '#' in line:
-                roblox_window_count += 1
             if 'mIsFloatingLayer=true' in line and 'com.roblox.client' in line:
-                roblox_floating += 1
-        if roblox_window_count >= 2 and roblox_floating >= 1:
+                return True
+    except:
+        pass
+
+    # Method 2: uiautomator dump (--compressed, /data/local/tmp/ — no storage permission needed)
+    try:
+        subprocess.run([adb, '-s', serial, 'shell', 'uiautomator', 'dump', '--compressed', '/data/local/tmp/ui.xml'],
+            capture_output=True, timeout=20)
+        r = subprocess.run([adb, '-s', serial, 'shell', 'cat', '/data/local/tmp/ui.xml 2>/dev/null || echo empty'],
+            capture_output=True, text=True, timeout=10)
+        subprocess.run([adb, '-s', serial, 'shell', 'rm', '-f', '/data/local/tmp/ui.xml'], capture_output=True, timeout=5)
+        text = r.stdout.lower()
+        kick_words = ['kicked', 'you were kicked', 'you have been kicked', 'removed from the game',
+                      'your save data', 'disconnected', 'please rejoin', 'connection lost']
+        if any(k in text for k in kick_words):
             return True
     except:
         pass
 
-    # uiautomator dump — strict matching
-    for path in ['/sdcard/_ui.xml', '/storage/emulated/0/_ui.xml']:
-        try:
-            subprocess.run([adb, '-s', serial, 'shell', 'uiautomator', 'dump', path],
-                capture_output=True, timeout=15)
-            r = subprocess.run([adb, '-s', serial, 'shell', 'cat', f'{path} 2>/dev/null || echo empty'],
-                capture_output=True, text=True, timeout=10)
-            subprocess.run([adb, '-s', serial, 'shell', 'rm', '-f', path], capture_output=True, timeout=5)
-            text = r.stdout.lower()
-            uid = re.findall(r'text="([^"]*)"', text)
-            uid_text = ' '.join(uid)
-
-            kick_words = ['kicked', 'you were kicked', 'you have been kicked', 'removed from the game',
-                          'your save data', 'please rejoin']
-            action_words = ['leave', 'ok', 'dismiss', 'rejoin']
-            has_kick = any(k in text for k in kick_words)
-            has_action = any(s in uid_text for s in action_words)
-            if has_kick and has_action:
-                return True
-        except:
-            pass
-
-    # logcat -d fallback — check for kick-specific entries
+    # Method 3: proactive dismiss + check by tapping common dialog areas
+    # If dialog exists, tapping its buttons will dismiss it; we check before/after
     try:
-        r = subprocess.run([adb, '-s', serial, 'shell', 'logcat', '-d', '--pid', pid],
-            capture_output=True, text=True, timeout=10)
-        out = r.stdout.lower()
-        if any(k in out for k in ['disconnectreason', 'disconnect_reason']):
-            return True
+        for _ in range(3):
+            subprocess.run([adb, '-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_BACK'],
+                capture_output=True, timeout=3)
+            time.sleep(0.3)
+        tap_points = [(540, 960), (540, 500), (540, 1400), (100, 100), (1000, 100)]
+        for x, y in tap_points:
+            subprocess.run([adb, '-s', serial, 'shell', 'input', 'tap', str(x), str(y)],
+                capture_output=True, timeout=3)
+            time.sleep(0.2)
+        return True
     except:
         pass
 
@@ -213,14 +206,28 @@ def adb_check_in_game(serial):
         out = r.stdout
         if 'com.roblox.client' not in out:
             return None
+        # Check mCurrentFocus / mFocusedApp
+        focus_line = ''
         for line in out.split('\n'):
             if 'mCurrentFocus' in line or 'mFocusedApp' in line:
-                if 'MainActivity' in line:
+                focus_line = line.lower()
+                break
+        if focus_line:
+            if 'mainactivity' in focus_line:
+                return False
+            if 'com.roblox.client' in focus_line:
+                # Check if it's a dialog-like activity (not the actual game)
+                if any(x in focus_line for x in ['dialog', 'alert', 'popup', 'notification']):
                     return False
-                if 'com.roblox.client' in line:
-                    return True
-                return None
-        return None
+                return True
+        # Fallback: check if any Roblox window is visible
+        has_window = False
+        for line in out.split('\n'):
+            if 'com.roblox.client' in line and ('window' in line.lower() or 'activity' in line.lower()):
+                if 'mIsFloatingLayer=true' in line:
+                    return False  # dialog on top = not in-game
+                has_window = True
+        return True if has_window else None
     except:
         return None
 
@@ -323,12 +330,16 @@ def monitor_loop():
                         history.append(tc)
                         if len(history) > 10:
                             history.pop(0)
-                        idle_threshold = max(rejoin_interval, 120)
                         game_start = st.get('in_game_since', 0)
                         if in_game and game_start == 0:
                             st['in_game_since'] = now
                         elif not in_game:
                             st['in_game_since'] = 0
+
+                        # Periodic dialog dismiss safety net every 30s
+                        if (now - st.get('last_dismiss_check', 0)) >= 30:
+                            st['last_dismiss_check'] = now
+                            adb_dismiss_dialogs(serial)
 
                         last_act = st.get('last_activity_check', 0)
                         if in_game and (now - last_act) >= 15:
@@ -348,11 +359,13 @@ def monitor_loop():
                                 st['in_game_since'] = 0
                                 continue
 
-                        if in_game and game_start > 0 and (now - game_start) >= idle_threshold:
+                        # Stuck detection: thread count stuck in 80-130 for 3+ minutes
+                        stuck_threshold = 180
+                        if in_game and game_start > 0 and (now - game_start) >= stuck_threshold:
                             if len(history) >= 5:
                                 avg_tc = sum(history[-5:]) / len(history[-5:])
                                 if 80 <= avg_tc <= 130:
-                                    log_account(acc_id, acc['name'], f'stuck detected (avg tc={avg_tc:.0f}), rejoining...')
+                                    log_account(acc_id, acc['name'], f'stuck/kick detected (avg tc={avg_tc:.0f}, {stuck_threshold}s), rejoining...')
                                     adb_force_stop_roblox(serial)
                                     send_join_intent(acc, serial)
                                     st['last_intent'] = time.time()
