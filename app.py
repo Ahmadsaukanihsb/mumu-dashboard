@@ -125,7 +125,7 @@ def adb_dismiss_dialogs(serial):
 
 def adb_detect_kicked_dialog(serial):
     adb = find_adb()
-    if not adb: return False
+    if not adb: return None
 
     pid = None
     try:
@@ -135,29 +135,29 @@ def adb_detect_kicked_dialog(serial):
     except:
         pass
     if not pid:
-        return False
+        return None
 
-    # Method 1: dumpsys window windows — scan window names/titles + floating layer
+    # Method 1: dumpsys window windows — floating layer + window titles
     try:
         r = subprocess.run([adb, '-s', serial, 'shell', 'dumpsys', 'window', 'windows'],
             capture_output=True, text=True, timeout=10)
         out = r.stdout.lower()
         if 'com.roblox.client' not in out:
-            return False
+            return None
         # 1a: check for Roblox floating dialog
         for line in out.split('\n'):
             if 'mIsFloatingLayer=true' in line and 'com.roblox.client' in line:
-                return True
-        # 1b: scan window titles for kick/disconnect keywords
+                return '1a_floating'
+        # 1b: scan window titles (only lines containing com.roblox.client)
         for line in out.split('\n'):
-            if any(k in line.lower() for k in ['disconnected', 'kicked', 'reconnecting', 'you were kicked',
-                'you have been kicked', 'connection lost', 'error', 'alert']):
-                if 'com.roblox.client' in line.lower() or 'window' in line.lower():
-                    return True
+            if 'com.roblox.client' in line.lower() and any(k in line.lower() for k in
+                ['disconnected', 'kicked', 'reconnecting', 'you were kicked',
+                 'you have been kicked', 'connection lost']):
+                return '1b_title:' + line.strip()[:60]
     except:
         pass
 
-    # Method 2: uiautomator dump (with --compressed for speed, fallback to full)
+    # Method 2: uiautomator dump
     for compressed in [True, False]:
         try:
             cmd = ['uiautomator', 'dump']
@@ -173,22 +173,10 @@ def adb_detect_kicked_dialog(serial):
                           'your save data', 'disconnected', 'please rejoin', 'connection lost',
                           'reconnecting', 'an error occurred', 'failed to connect']
             if any(k in text for k in kick_words):
-                return True
+                return '2_uiautomator'
         except:
             pass
 
-    return False
-
-def adb_screenshot(serial):
-    adb = find_adb()
-    if not adb: return None
-    try:
-        r = subprocess.run([adb, '-s', serial.strip(), 'exec-out', 'screencap', '-p'],
-            capture_output=True, timeout=15)
-        if r.returncode == 0 and len(r.stdout) > 100:
-            return r.stdout
-    except:
-        pass
     return None
 
 def adb_check_in_game(serial):
@@ -343,9 +331,10 @@ def monitor_loop():
                         # Kicked/disconnect detection every cycle
                         if (now - st.get('last_kicked_check', 0)) >= 5:
                             st['last_kicked_check'] = now
-                            if adb_detect_kicked_dialog(serial):
-                                log_account(acc_id, acc['name'], 'kicked/disconnect detected, rejoining...')
-                                send_webhook(f'⚠️ {acc["name"]} — Kicked/Disconnect', 'Kicked or disconnected dialog detected', 0xffaa00, acc.get('verified_avatar'))
+                            kick_result = adb_detect_kicked_dialog(serial)
+                            if kick_result:
+                                log_account(acc_id, acc['name'], f'kicked detected [{kick_result}], rejoining...')
+                                send_webhook(f'⚠️ {acc["name"]} — Kicked/Disconnect', f'Dialog detected [{kick_result}]', 0xffaa00, acc.get('verified_avatar'))
                                 send_join_intent(acc, serial)
                                 st['last_intent'] = time.time()
                                 st['in_game'] = False
@@ -355,7 +344,7 @@ def monitor_loop():
                         # Thread count drop detection: suddenly dropped from in-game
                         prev_in_game = st.get('in_game')
                         if prev_in_game is True and tc < 80:
-                            log_account(acc_id, acc['name'], f'thread drop detected ({tc}), rejoining...')
+                            log_account(acc_id, acc['name'], f'thread drop detected [tc={tc}, prev_in_game=True], rejoining...')
                             adb_force_stop_roblox(serial)
                             send_join_intent(acc, serial)
                             st['last_intent'] = time.time()
