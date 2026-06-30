@@ -215,6 +215,18 @@ def adb_check_in_game(serial):
     except:
         return None
 
+def adb_screenshot(serial):
+    adb = find_adb()
+    if not adb: return None
+    try:
+        r = subprocess.run([adb, '-s', serial.strip(), 'exec-out', 'screencap', '-p'],
+            capture_output=True, timeout=15)
+        if r.returncode == 0 and len(r.stdout) > 100:
+            return r.stdout
+    except:
+        pass
+    return None
+
 def send_join_intent(acc, serial):
     sv = next((s for s in servers if s['id'] == acc.get('server_id')), None)
     if not sv and servers:
