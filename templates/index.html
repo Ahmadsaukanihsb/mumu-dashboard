@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roblox Dashboard</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css?v=4">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <i class="fas fa-gamepad"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">Roblox</span>
+                            <span class="brand-sub">MuMu Dashboard</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
+                    <i class="fas fa-chart-pie"></i><span>Dashboard</span>
+                </a>
+                <a class="nav-item" data-page="accounts" onclick="switchPage('accounts')">
+                    <i class="fas fa-users"></i><span>Accounts</span>
+                </a>
+                <a class="nav-item" data-page="servers" onclick="switchPage('servers')">
+                    <i class="fas fa-server"></i><span>Servers</span>
+                </a>
+                <a class="nav-item" data-page="activity" onclick="switchPage('activity')">
+                    <i class="fas fa-history"></i><span>Activity</span>
+                </a>
+                <a class="nav-item" data-page="settings" onclick="switchPage('settings')">
+                    <i class="fas fa-cog"></i><span>Settings</span>
+                </a>
+                <a class="nav-item" data-page="vms" onclick="switchPage('vms')">
+                    <i class="fas fa-desktop"></i><span>VMs</span>
+                </a>
+                <a class="nav-item" data-page="scripts" onclick="switchPage('scripts')">
+                    <i class="fas fa-code"></i><span>Scripts</span>
+                </a>
+                <a class="nav-item" data-page="logs" onclick="switchPage('logs')">
+                    <i class="fas fa-clipboard-list"></i><span>Logs</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator" id="serverStatus">
+                    <span class="status-dot online"></span>
+                    <span class="status-text">Server Online</span>
+                </div>
+                <button class="btn btn-sm btn-outline" onclick="logout()" style="margin-top:8px;width:100%;font-size:11px" id="btnLogout" title="Logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <button class="menu-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="topbar-title">
+                    <h1 id="pageTitle">Dashboard</h1>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-primary" onclick="quickJoinGame('126884695634066')" title="Grow A Garden">
+                        <i class="fas fa-leaf"></i> GAG
+                    </button>
+                    <button class="btn btn-primary" onclick="quickJoinGame('97598239454123')" title="Grow A Garden 2">
+                        <i class="fas fa-seedling"></i> GAG2
+                    </button>
+                    <button class="btn btn-primary" onclick="joinAllAccounts()">
+                        <i class="fas fa-play"></i> Join All
+                    </button>
+                    <button class="btn btn-secondary" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Dashboard Page -->
+                <div class="page active" id="page-dashboard">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2)">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Total Accounts</span>
+                                <span class="stat-value" id="statAccounts">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b, #38f9d7)">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Online</span>
+                                <span class="stat-value" id="statOnline" style="color:var(--green)">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c)">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Error</span>
+                                <span class="stat-value" id="statError" style="color:var(--red)">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe)">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">VMs Running</span>
+                                <span class="stat-value" id="statVMs">0/5</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #fccb90, #d57eeb)">
+                                <i class="fas fa-dollar-sign"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Total Robux</span>
+                                <span class="stat-value" id="statRobux">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-users"></i> Daftar Account</h3>
+                            </div>
+                            <div class="card-body" id="dashAccountsList">
+                                <div class="empty-state">Belum ada account</div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-clock"></i> Activity Terbaru</h3>
+                            </div>
+                            <div class="card-body" id="dashActivityList">
+                                <div class="empty-state">Belum ada aktivitas</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card" style="margin-top:20px">
+                        <div class="card-header">
+                            <h3><i class="fas fa-bolt"></i> Quick Join</h3>
+                        </div>
+                        <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn btn-primary" onclick="quickJoinGame('126884695634066')"><i class="fas fa-leaf"></i> Join Grow A Garden</button>
+                            <button class="btn btn-primary" onclick="quickJoinGame('97598239454123')"><i class="fas fa-seedling"></i> Join Grow A Garden 2</button>
+                            <div id="quickJoinResult" style="width:100%;margin-top:8px;display:none"></div>
+                        </div>
+                    </div>
+                    <div class="card" style="margin-top:20px">
+                        <div class="card-header">
+                            <h3><i class="fas fa-camera"></i> VM Screenshots</h3>
+                            <button class="btn btn-sm btn-secondary" onclick="refreshAllScreenshots()"><i class="fas fa-sync-alt"></i> Refresh All</button>
+                        </div>
+                        <div class="card-body" id="screenshotGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accounts Page -->
+                <div class="page" id="page-accounts">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-list"></i> Daftar Account</h3>
+                            <button class="btn btn-success" onclick="verifyAllAccounts()" id="btnVerifyAll"><i class="fas fa-check-double"></i> Verify All</button>
+                            <button class="btn btn-primary" onclick="showAddAccount()"><i class="fas fa-plus"></i> Tambah</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nama</th>
+                                            <th>Status</th>
+                                            <th>Instance</th>
+                                            <th>Server</th>
+                                            <th>Last Join</th>
+                                            <th>Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="accountsTableBody">
+                                        <tr><td colspan="6" class="empty-state">Belum ada account</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Servers Page -->
+                <div class="page" id="page-servers">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-list"></i> Daftar Server</h3>
+                            <button class="btn btn-primary" onclick="showAddServer()"><i class="fas fa-plus"></i> Tambah</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nama</th>
+                                            <th>Tipe</th>
+                                            <th>Place ID</th>
+                                            <th>Link / Code</th>
+                                            <th>Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="serversTableBody">
+                                        <tr><td colspan="5" class="empty-state">Belum ada server</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity Page -->
+                <div class="page" id="page-activity">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-history"></i> Activity Log</h3>
+                            <button class="btn btn-danger" onclick="clearActivity()"><i class="fas fa-trash"></i> Clear</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="activity-log" id="activityLog">
+                                <div class="empty-state">Belum ada aktivitas</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Page -->
+                <div class="page" id="page-settings">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-sliders-h"></i> Pengaturan Umum</h3>
+                            <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Simpan</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="settings-grid">
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Auto-Join Otomatis</label>
+                                        <span class="setting-desc">Join otomatis saat kena kick atau leave</span>
+                                    </div>
+                                    <label class="toggle">
+                                        <input type="checkbox" id="autoJoinEnabled" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Delay Rejoin (detik)</label>
+                                        <span class="setting-desc">Jeda sebelum join ulang</span>
+                                    </div>
+                                    <input type="number" class="input" id="rejoinDelay" value="3" min="1" max="60">
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Max Retries</label>
+                                        <span class="setting-desc">Maksimal percobaan join ulang</span>
+                                    </div>
+                                    <input type="number" class="input" id="maxRetries" value="5" min="1" max="20">
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Monitor Interval (detik)</label>
+                                        <span class="setting-desc">Interval pengecekan status</span>
+                                    </div>
+                                    <input type="number" class="input" id="monitorInterval" value="2" min="1" max="30">
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Rejoin Periodik (menit)</label>
+                                        <span class="setting-desc">Auto join ulang setiap N menit (0=nonaktif)</span>
+                                    </div>
+                                    <input type="number" class="input" id="rejoinInterval" value="40" min="0" max="999">
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Discord Webhook URL</label>
+                                        <span class="setting-desc">Notifikasi otomatis (kick, error, offline)</span>
+                                    </div>
+                                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                                        <input type="url" class="input" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." style="width:280px;font-size:12px">
+                                        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
+                                            <input type="checkbox" id="webhookEnabled"> ON
+                                        </label>
+                                        <button class="btn btn-sm btn-secondary" onclick="testWebhook()"><i class="fas fa-paper-plane"></i> Test</button>
+                                    </div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Auto-Restart VM Crash</label>
+                                        <span class="setting-desc">Restart otomatis VM yang crash/tiba-tiba mati</span>
+                                    </div>
+                                    <label class="toggle">
+                                        <input type="checkbox" id="autoRestartVM" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Password Dashboard</label>
+                                        <span class="setting-desc">Proteksi akses dashboard dengan password (kosongkan = nonaktif)</span>
+                                    </div>
+                                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                                        <input type="password" class="input" id="dashboardPassword" placeholder="Biarkan kosong jika tidak ingin password" style="width:200px;font-size:12px">
+                                        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
+                                            <input type="checkbox" id="showPassword"> Show
+                                        </label>
+                                        <button class="btn btn-sm btn-danger" id="btnClearPassword" onclick="clearPassword()" style="display:none;font-size:11px"><i class="fas fa-trash"></i> Hapus</button>
+                                    </div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>Restore from Backup</label>
+                                        <span class="setting-desc">Kembalikan akun & server dari data.json.bak</span>
+                                    </div>
+                                    <button class="btn btn-sm btn-secondary" onclick="restoreFromBackup()" id="btnRestore"><i class="fas fa-undo-alt"></i> Restore</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-robot"></i> MuMu Player - 5 Instances</h3>
+                            <div style="display:flex;gap:8px">
+                                <button class="btn btn-secondary" id="btnScanADB" onclick="scanADBSerials()"><i class="fas fa-search"></i> Scan ADB</button>
+                                <button class="btn btn-secondary" id="btnTestADB" onclick="testADB()"><i class="fas fa-plug"></i> Test</button>
+                                <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Simpan</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="adbStatus" style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:var(--bg-input);border:1px solid var(--border-color);font-size:13px;color:var(--text-muted)">
+                                <i class="fas fa-search"></i> Mendeteksi ADB...
+                            </div>
+                            <div id="adbTestResults" style="margin-bottom:12px;display:none"></div>
+                            <div class="settings-grid">
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <label>ADB Path</label>
+                                        <span class="setting-desc">Lokasi adb.exe (otomatis terdeteksi)</span>
+                                    </div>
+                                    <input type="text" class="input" id="adbPath" placeholder="Auto-detect" style="max-width:300px;font-size:12px">
+                                </div>
+                            </div>
+                            <div style="margin-top:16px">
+                                <label style="font-size:13px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:8px">Serial (IP:Port) per MuMu Instance:</label>
+                                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px" id="mumuSerialLabels">
+                                    <div>
+                                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px" data-vmidx="0">MuMu-0</label>
+                                        <input type="text" class="input mumu-serial" data-idx="0" placeholder="IP:5555" style="text-align:center;font-size:12px">
+                                    </div>
+                                    <div>
+                                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px" data-vmidx="1">MuMu-1</label>
+                                        <input type="text" class="input mumu-serial" data-idx="1" placeholder="IP:5555" style="text-align:center;font-size:12px">
+                                    </div>
+                                    <div>
+                                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px" data-vmidx="2">MuMu-2</label>
+                                        <input type="text" class="input mumu-serial" data-idx="2" placeholder="IP:5555" style="text-align:center;font-size:12px">
+                                    </div>
+                                    <div>
+                                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px" data-vmidx="3">MuMu-3</label>
+                                        <input type="text" class="input mumu-serial" data-idx="3" placeholder="IP:5555" style="text-align:center;font-size:12px">
+                                    </div>
+                                    <div>
+                                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px" data-vmidx="4">MuMu-4</label>
+                                        <input type="text" class="input mumu-serial" data-idx="4" placeholder="IP:5555" style="text-align:center;font-size:12px">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VMs Page -->
+                <div class="page" id="page-vms">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-desktop"></i> MuMu VM Manager</h3>
+                            <div style="display:flex;gap:8px">
+                                <button class="btn btn-primary" id="btnStartAllJoin" onclick="startAllAndJoin()"><i class="fas fa-play"></i> Start All & Join</button>
+                                <button class="btn btn-secondary" onclick="refreshMuMuVMs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="startAllProgress" style="display:none;margin-bottom:12px"></div>
+                            <div id="mumuVMList">
+                                <div class="empty-state">Loading VMs...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scripts Page -->
+                <div class="page" id="page-scripts">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-file-code"></i> Auto-Join Script</h3>
+                            <button class="btn btn-primary" onclick="copyScript()"><i class="fas fa-copy"></i> Copy</button>
+                        </div>
+                        <div class="card-body">
+                            <p class="script-info">
+                                <i class="fas fa-info-circle"></i>
+                                Inject script ini ke Roblox via executor untuk mengaktifkan auto-join monitoring.
+                            </p>
+                            <pre class="code-block" id="scriptOutput">Loading...</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs Page -->
+                <div class="page" id="page-logs">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-clipboard-list"></i> Account Logs</h3>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <select class="input" id="logAccountSelect" onchange="loadAccountLogs(this.value)" style="max-width:200px;font-size:12px">
+                                    <option value="">— Pilih Account —</option>
+                                </select>
+                                <button class="btn btn-sm btn-secondary" onclick="clearAccountLogs()"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="card-body" id="accountLogsContainer">
+                            <div class="empty-state">Pilih account untuk melihat log</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Tambah/Edit Account -->
+    <div class="modal" id="accountModal">
+        <div class="modal-backdrop" onclick="closeModal('accountModal')"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="accountModalTitle">Tambah Account</h3>
+                <button class="modal-close" onclick="closeModal('accountModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editAccountId">
+                <div class="form-group">
+                    <label>Nama Account</label>
+                    <input type="text" class="input" id="accName" placeholder="Account 1">
+                </div>
+                <div class="form-group">
+                    <label>.ROBLOSECURITY Cookie</label>
+                    <div class="input-group">
+                        <input type="password" class="input" id="accCookie" placeholder="Masukkan cookie...">
+                        <button class="btn btn-icon" onclick="togglePassword('accCookie', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Assigned Servers <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(centang, pilih auto-join)</span></label>
+                    <div id="accServerList" style="max-height:160px;overflow-y:auto;border:1px solid var(--border-color);border-radius:6px;padding:4px 0">
+                        <div style="padding:12px;text-align:center;color:var(--text-muted);font-size:12px">Loading servers...</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>MuMu Instance</label>
+                    <select class="input" id="accInstance"></select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('accountModal')">Batal</button>
+                <button class="btn btn-primary" onclick="saveAccount()">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah/Edit Server -->
+    <div class="modal" id="serverModal">
+        <div class="modal-backdrop" onclick="closeModal('serverModal')"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="serverModalTitle">Tambah Server</h3>
+                <button class="modal-close" onclick="closeModal('serverModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editServerId">
+                <div class="form-group">
+                    <label>Nama Server</label>
+                    <input type="text" class="input" id="svName" placeholder="My Private Server">
+                </div>
+                <div class="form-group">
+                    <label>Tipe Server</label>
+                    <select class="input" id="svType" onchange="toggleServerFields()">
+                        <option value="public">Public Server</option>
+                        <option value="private">Private Server</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Place ID</label>
+                    <input type="text" class="input" id="svPlaceId" placeholder="4483381587">
+                </div>
+                <div class="form-group private-field" style="display:none">
+                    <label>Server Code / Link Code</label>
+                    <input type="text" class="input" id="svCode" placeholder="abcd1234">
+                </div>
+                <div class="form-group private-field" style="display:none">
+                    <label>Full Private Server Link</label>
+                    <input type="text" class="input" id="svLink" placeholder="https://www.roblox.com/games/...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('serverModal')">Batal</button>
+                <button class="btn btn-primary" onclick="saveServer()">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js?v=4"></script>
+</body>
+</html>

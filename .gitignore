@@ -1,0 +1,7 @@
+data.json
+data.json.bak
+__pycache__/
+*.pyc
+.env
+*.txt
+.playwright-mcp/
