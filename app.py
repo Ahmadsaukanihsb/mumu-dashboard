@@ -157,20 +157,7 @@ def adb_detect_kicked_dialog(serial):
     except:
         pass
 
-    # Method 2: dumpsys activity activities — check resumed/focused activity name
-    try:
-        r = subprocess.run([adb, '-s', serial, 'shell', 'dumpsys', 'activity', 'activities'],
-            capture_output=True, text=True, timeout=10)
-        for line in r.stdout.split('\n'):
-            if 'mResumedActivity' in line or 'mFocusedActivity' in line:
-                lc = line.lower()
-                if 'com.roblox.client' in lc:
-                    if any(x in lc for x in ['dialog', 'alert', 'popup', 'notification', '.error']):
-                        return True
-    except:
-        pass
-
-    # Method 3: uiautomator dump (with --compressed for speed, fallback to full)
+    # Method 2: uiautomator dump (with --compressed for speed, fallback to full)
     for compressed in [True, False]:
         try:
             cmd = ['uiautomator', 'dump']
