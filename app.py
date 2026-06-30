@@ -137,36 +137,58 @@ def adb_detect_kicked_dialog(serial):
     if not pid:
         return False
 
-    # Method 1: dumpsys — check floating layer windows from Roblox
+    # Method 1: dumpsys window windows — scan window names/titles + floating layer
     try:
         r = subprocess.run([adb, '-s', serial, 'shell', 'dumpsys', 'window', 'windows'],
             capture_output=True, text=True, timeout=10)
         out = r.stdout.lower()
         if 'com.roblox.client' not in out:
             return False
+        # 1a: check for Roblox floating dialog
         for line in out.split('\n'):
             if 'mIsFloatingLayer=true' in line and 'com.roblox.client' in line:
                 return True
+        # 1b: scan window titles for kick/disconnect keywords
+        for line in out.split('\n'):
+            if any(k in line.lower() for k in ['disconnected', 'kicked', 'reconnecting', 'you were kicked',
+                'you have been kicked', 'connection lost', 'error', 'alert']):
+                if 'com.roblox.client' in line.lower() or 'window' in line.lower():
+                    return True
     except:
         pass
 
-    # Method 2: uiautomator dump (--compressed, /data/local/tmp/ — no storage permission needed)
+    # Method 2: dumpsys activity activities — check resumed/focused activity name
     try:
-        subprocess.run([adb, '-s', serial, 'shell', 'uiautomator', 'dump', '--compressed', '/data/local/tmp/ui.xml'],
-            capture_output=True, timeout=20)
-        r = subprocess.run([adb, '-s', serial, 'shell', 'cat', '/data/local/tmp/ui.xml 2>/dev/null || echo empty'],
+        r = subprocess.run([adb, '-s', serial, 'shell', 'dumpsys', 'activity', 'activities'],
             capture_output=True, text=True, timeout=10)
-        subprocess.run([adb, '-s', serial, 'shell', 'rm', '-f', '/data/local/tmp/ui.xml'], capture_output=True, timeout=5)
-        text = r.stdout.lower()
-        kick_words = ['kicked', 'you were kicked', 'you have been kicked', 'removed from the game',
-                      'your save data', 'disconnected', 'please rejoin', 'connection lost']
-        if any(k in text for k in kick_words):
-            return True
+        for line in r.stdout.split('\n'):
+            if 'mResumedActivity' in line or 'mFocusedActivity' in line:
+                lc = line.lower()
+                if 'com.roblox.client' in lc:
+                    if any(x in lc for x in ['dialog', 'alert', 'popup', 'notification', '.error']):
+                        return True
     except:
         pass
 
-    # Method 3: no longer runs proactive tap here — moved to monitor loop
-    # (gate behind in_game check to avoid random clicks while playing)
+    # Method 3: uiautomator dump (with --compressed for speed, fallback to full)
+    for compressed in [True, False]:
+        try:
+            cmd = ['uiautomator', 'dump']
+            if compressed:
+                cmd.append('--compressed')
+            cmd.append('/data/local/tmp/ui.xml')
+            subprocess.run([adb, '-s', serial, 'shell'] + cmd, capture_output=True, timeout=15)
+            r = subprocess.run([adb, '-s', serial, 'shell', 'cat', '/data/local/tmp/ui.xml 2>/dev/null || echo empty'],
+                capture_output=True, text=True, timeout=10)
+            subprocess.run([adb, '-s', serial, 'shell', 'rm', '-f', '/data/local/tmp/ui.xml'], capture_output=True, timeout=5)
+            text = r.stdout.lower()
+            kick_words = ['kicked', 'you were kicked', 'you have been kicked', 'removed from the game',
+                          'your save data', 'disconnected', 'please rejoin', 'connection lost',
+                          'reconnecting', 'an error occurred', 'failed to connect']
+            if any(k in text for k in kick_words):
+                return True
+        except:
+            pass
 
     return False
 
@@ -313,10 +335,6 @@ def monitor_loop():
                     if tc is not None:
                         st['last_tc'] = tc
                         in_game = tc >= 80
-                        history = st.setdefault('tc_history', [])
-                        history.append(tc)
-                        if len(history) > 10:
-                            history.pop(0)
                         game_start = st.get('in_game_since', 0)
                         if in_game and game_start == 0:
                             st['in_game_since'] = now
@@ -335,30 +353,28 @@ def monitor_loop():
                                 log_account(acc_id, acc['name'], 'activity check: not in game, rejoining...')
                                 in_game = False
 
-                        if (now - st.get('last_kicked_check', 0)) >= 15:
+                        # Kicked/disconnect detection every cycle
+                        if (now - st.get('last_kicked_check', 0)) >= 5:
                             st['last_kicked_check'] = now
                             if adb_detect_kicked_dialog(serial):
-                                log_account(acc_id, acc['name'], 'kicked dialog detected, dismissing & rejoining')
-                                send_webhook(f'⚠️ {acc["name"]} — Kicked Dialog', 'Kicked dialog detected via UI dump', 0xffaa00, acc.get('verified_avatar'))
+                                log_account(acc_id, acc['name'], 'kicked/disconnect detected, rejoining...')
+                                send_webhook(f'⚠️ {acc["name"]} — Kicked/Disconnect', 'Kicked or disconnected dialog detected', 0xffaa00, acc.get('verified_avatar'))
                                 send_join_intent(acc, serial)
                                 st['last_intent'] = time.time()
                                 st['in_game'] = False
                                 st['in_game_since'] = 0
                                 continue
 
-                        # Stuck detection: thread count stuck in 80-130 for 3+ minutes
-                        stuck_threshold = 180
-                        if in_game and game_start > 0 and (now - game_start) >= stuck_threshold:
-                            if len(history) >= 5:
-                                avg_tc = sum(history[-5:]) / len(history[-5:])
-                                if 80 <= avg_tc <= 130:
-                                    log_account(acc_id, acc['name'], f'stuck/kick detected (avg tc={avg_tc:.0f}, {stuck_threshold}s), rejoining...')
-                                    adb_force_stop_roblox(serial)
-                                    send_join_intent(acc, serial)
-                                    st['last_intent'] = time.time()
-                                    st['in_game'] = False
-                                    st['in_game_since'] = 0
-                                    continue
+                        # Thread count drop detection: suddenly dropped from in-game
+                        prev_in_game = st.get('in_game')
+                        if prev_in_game is True and tc < 80:
+                            log_account(acc_id, acc['name'], f'thread drop detected ({tc}), rejoining...')
+                            adb_force_stop_roblox(serial)
+                            send_join_intent(acc, serial)
+                            st['last_intent'] = time.time()
+                            st['in_game'] = False
+                            st['in_game_since'] = 0
+                            continue
 
                         if in_game:
                             if not was_in_game and not st.get('in_game_notified', False):
