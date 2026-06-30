@@ -227,6 +227,25 @@ def adb_screenshot(serial):
         pass
     return None
 
+def adb_check_join_failed(serial):
+    """Check via uiautomator dump if join failed (kicked/disconnected dialog). Returns True if failed."""
+    adb = find_adb()
+    if not adb: return None
+    try:
+        subprocess.run([adb, '-s', serial.strip(), 'shell', 'uiautomator', 'dump', '--compressed', '/data/local/tmp/join.xml'],
+            capture_output=True, timeout=10)
+        r = subprocess.run([adb, '-s', serial.strip(), 'shell', 'cat', '/data/local/tmp/join.xml 2>/dev/null || echo empty'],
+            capture_output=True, text=True, timeout=5)
+        subprocess.run([adb, '-s', serial.strip(), 'shell', 'rm', '-f', '/data/local/tmp/join.xml'], capture_output=True, timeout=3)
+        text = r.stdout.lower()
+        fail_words = ['kicked', 'you were kicked', 'you have been kicked', 'removed from the game',
+                      'your save data', 'disconnected', 'connection lost', 'reconnecting', 'please rejoin']
+        if any(k in text for k in fail_words):
+            return True
+        return False
+    except:
+        return None
+
 def send_join_intent(acc, serial):
     sv = next((s for s in servers if s['id'] == acc.get('server_id')), None)
     if not sv and servers:
@@ -239,17 +258,47 @@ def send_join_intent(acc, serial):
     adb_force_stop_roblox(serial)
     time.sleep(3)
     code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'", '-p', 'com.roblox.client'], serial)
-    time.sleep(20)
-    adb_dismiss_dialogs(serial)
-    time.sleep(2)
-    adb_dismiss_dialogs(serial)
-    if code == 0:
-        now = time.time()
-        acc['last_join_time'] = now
-        acc['status'] = 'connected'
-        acc['last_joined'] = time.strftime('%H:%M:%S')
-        save_data()
-        return True
+    if code != 0:
+        return False
+
+    # Poll for up to 20s with UI dump checks, retry if kicked/disconnected
+    for attempt in range(3):
+        for _ in range(4):  # 4 × 5s = 20s polling per attempt
+            time.sleep(5)
+            failed = adb_check_join_failed(serial)
+            if failed is True:
+                log_account(acc.get('id', ''), acc.get('name', '?'), f'join failed (kick/disconnect detected via ui dump), retry #{attempt+1}')
+                adb_dismiss_dialogs(serial)
+                time.sleep(2)
+                break
+            elif failed is False:
+                # no dialog detected, continue polling
+                continue
+            else:
+                # None = error, continue polling
+                continue
+        else:
+            # No failure detected in all 4 polls → join looks successful
+            adb_dismiss_dialogs(serial)
+            time.sleep(2)
+            adb_dismiss_dialogs(serial)
+            now = time.time()
+            acc['last_join_time'] = now
+            acc['status'] = 'connected'
+            acc['last_joined'] = time.strftime('%H:%M:%S')
+            save_data()
+            return True
+
+        # Failure detected → force stop and retry join
+        if attempt < 2:
+            adb_force_stop_roblox(serial)
+            time.sleep(3)
+            code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'", '-p', 'com.roblox.client'], serial)
+            if code != 0:
+                return False
+
+    # All retries exhausted
+    log_account(acc.get('id', ''), acc.get('name', '?'), 'join failed after 3 retries (kick/disconnect detected every time)')
     return False
 
 monitor_state = {}
