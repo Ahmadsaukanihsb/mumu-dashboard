@@ -4,6 +4,9 @@ let settings = {};
 let activityLog = [];
 let refreshInterval = null;
 let vmDisplayNames = {};
+let logRefreshInterval = null; // Bug #8 fix: deklarasi di scope global agar tidak implicit global
+let inventoryData = {};
+let itemThumbnails = {};
 
 function getVmDisplayName(index) {
     return vmDisplayNames[index] || `MuMu-${index}`;
@@ -19,11 +22,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshInterval = setInterval(refreshData, 5000);
     if (countdownInterval) clearInterval(countdownInterval);
     countdownInterval = setInterval(updateCountdowns, 5000);
+    updateClock();
+    setInterval(updateClock, 1000);
 });
 
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     sidebar.classList.toggle('open');
+}
+
+function toggleSidebarCollapse() {
+    document.body.classList.toggle('sidebar-collapsed');
+    const btn = document.querySelector('.sidebar-toggle-btn i');
+    if (btn) {
+        btn.className = document.body.classList.contains('sidebar-collapsed')
+            ? 'fas fa-chevron-right'
+            : 'fas fa-chevron-left';
+    }
 }
 
 function showToast(msg, type = 'info', duration = 3500) {
@@ -91,21 +106,27 @@ function switchPage(page) {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');
 
-    const titles = {
-        dashboard: 'Dashboard',
-        accounts: 'Accounts',
-        servers: 'Servers',
-        activity: 'Activity',
-        settings: 'Settings',
-        vms: 'VMs',
-        scripts: 'Scripts',
-        logs: 'Logs'
+    const pageMeta = {
+        dashboard: { title: 'Dashboard', icon: 'chart-pie' },
+        accounts: { title: 'Accounts', icon: 'users' },
+        servers: { title: 'Servers', icon: 'server' },
+        activity: { title: 'Activity', icon: 'history' },
+        settings: { title: 'Settings', icon: 'cog' },
+        vms: { title: 'VMs', icon: 'desktop' },
+        scripts: { title: 'Scripts', icon: 'code' },
+        logs: { title: 'Logs', icon: 'clipboard-list' },
+        inventory: { title: 'Inventory', icon: 'box-open' },
+        mailbox: { title: 'Mailbox', icon: 'envelope' }
     };
-    document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
+    const meta = pageMeta[page] || { title: 'Dashboard', icon: 'chart-pie' };
+    document.getElementById('pageTitle').textContent = meta.title;
+    document.getElementById('pageIcon').innerHTML = `<i class="fas fa-${meta.icon}"></i>`;
 
     if (page === 'dashboard') { refreshAllScreenshots(); }
     if (page === 'scripts') loadScript();
     if (page === 'vms') { refreshMuMuVMs(); }
+    if (page === 'inventory') { refreshInventory(); }
+    if (page === 'mailbox') { initMailbox(); }
     if (page === 'logs') {
         populateLogAccountSelect();
         const sel = document.getElementById('logAccountSelect');
@@ -139,12 +160,14 @@ async function api(method, url, body = null) {
 }
 
 async function refreshData() {
-    const [accs, svs, act, sets, sum] = await Promise.all([
+    const [accs, svs, act, sets, sum, inv, thumbs] = await Promise.all([
         api('GET', '/api/accounts'),
         api('GET', '/api/servers'),
         api('GET', '/api/activity?limit=10'),
         api('GET', '/api/settings'),
-        api('GET', '/api/summary')
+        api('GET', '/api/summary'),
+        api('GET', '/api/inventory'),
+        api('GET', '/api/item-thumbnails')
     ]);
     if (accs && accs._error && accs._status === 401) {
         window.location.href = '/login';
@@ -153,19 +176,13 @@ async function refreshData() {
     if (accs) accounts = accs;
     if (svs) servers = svs;
     if (act) activityLog = act;
+    if (inv) inventoryData = inv;
+    if (thumbs) itemThumbnails = thumbs;
     if (sum && typeof sum.online === 'number') {
-        const ids = { statOnline: sum.online, statError: sum.error, statVMs: `${sum.running_vms}/${sum.total_vms}`, statRobux: (sum.total_robux || 0).toLocaleString(), statAccounts: accounts.length };
-        const animData = { statOnline: [0, sum.online], statError: [0, sum.error], statVMs: [0, 0], statRobux: [0, sum.total_robux || 0], statAccounts: [0, accounts.length] };
+        const ids = { statOnline: sum.online, statError: sum.error, statVMs: `${sum.running_vms}/${sum.total_vms}`, statRobux: (sum.total_robux || 0).toLocaleString(), statAccounts: accounts.length, statSheckles: (sum.total_sheckles || 0).toLocaleString(), statInventoryValue: (sum.total_inventory_value || 0).toLocaleString() };
         for (const [k, v] of Object.entries(ids)) {
             const el = document.getElementById(k);
-            if (el && k !== 'statVMs') {
-                const prev = parseInt(el.dataset.prev) || 0;
-                const cur = parseInt(v.toString().replace(/[^0-9]/g, '')) || 0;
-                if (cur !== prev) {
-                    el.dataset.prev = cur;
-                    animateValue(el, prev, cur);
-                }
-            } else if (el) {
+            if (el) {
                 el.textContent = v;
             }
         }
@@ -190,6 +207,9 @@ async function refreshData() {
     try { updateSidebarActivity(); } catch(e) { console.warn('updateSidebarActivity:', e); }
     try { updateAccountSelect(); } catch(e) { console.warn('updateAccountSelect:', e); }
     try { updateVmSerialLabels(); } catch(e) { console.warn('updateVmSerialLabels:', e); }
+    try { updateNavBadge(); } catch(e) { console.warn('updateNavBadge:', e); }
+    try { updateInventory(); } catch(e) { console.warn('updateInventory:', e); }
+    try { refreshGameStatus(); } catch(e) { console.warn('refreshGameStatus:', e); }
 }
 
 function updateADBStatus() {
@@ -208,49 +228,183 @@ function updateADBStatus() {
     }
 }
 
+let gameStatusData = {};
+
+async function refreshGameStatus() {
+    const res = await api('GET', '/api/game-status');
+    if (res) {
+        gameStatusData = res;
+        updateGameStatusDisplay();
+        updateSeasonalEventsDisplay();
+    }
+}
+
+function updateGameStatusDisplay() {
+    const weatherEl = document.getElementById('currentWeather');
+    const optionsEl = document.getElementById('weatherOptions');
+    if (!weatherEl || !optionsEl) return;
+
+    const currentWeather = gameStatusData.current_weather;
+    const weatherEvents = gameStatusData.weather_events || [];
+
+    if (currentWeather) {
+        const weather = weatherEvents.find(w => w.name === currentWeather);
+        if (weather) {
+            weatherEl.innerHTML = `
+                <div class="weather-icon">${weather.icon}</div>
+                <div class="weather-info">
+                    <div class="weather-name">${esc(weather.name)}</div>
+                    <div class="weather-effect">${esc(weather.effect)}</div>
+                    ${weather.mutation ? `<div style="font-size:11px;color:var(--yellow);margin-top:4px">Mutation: ${esc(weather.mutation)} (x${weather.mutation_multiplier})</div>` : ''}
+                </div>
+            `;
+        }
+    } else {
+        weatherEl.innerHTML = `
+            <div class="weather-icon">🌤️</div>
+            <div class="weather-info">
+                <div class="weather-name">Clear</div>
+                <div class="weather-effect">No active weather event</div>
+            </div>
+        `;
+    }
+
+    optionsEl.innerHTML = weatherEvents.map(w => `
+        <div class="weather-option ${currentWeather === w.name ? 'active' : ''}" onclick="setWeather('${w.name}')">
+            ${w.icon} ${w.name}
+        </div>
+    `).join('') + `
+        <div class="weather-option ${!currentWeather ? 'active' : ''}" onclick="setWeather(null)">
+            ❌ Clear
+        </div>
+    `;
+}
+
+async function setWeather(weatherName) {
+    const res = await api('POST', '/api/set-weather', { weather: weatherName });
+    if (res && res.success) {
+        gameStatusData.current_weather = res.current_weather;
+        updateGameStatusDisplay();
+    }
+}
+
+function updateSeasonalEventsDisplay() {
+    const el = document.getElementById('seasonalEventsContent');
+    if (!el) return;
+
+    const events = gameStatusData.seasonal_events || [];
+    if (events.length === 0) {
+        el.innerHTML = '<div class="empty-state"><i class="fas fa-calendar"></i> No events</div>';
+        return;
+    }
+
+    el.innerHTML = events.map(event => `
+        <div class="event-card">
+            <div class="event-icon">${event.icon}</div>
+            <div class="event-info">
+                <div class="event-name">${esc(event.name)}</div>
+                <div class="event-desc">${esc(event.description)}</div>
+            </div>
+            <div class="event-status ${event.status}">${event.status}</div>
+        </div>
+    `).join('');
+}
+
+function updateNavBadge() {
+    const badge = document.getElementById('accountErrorBadge');
+    if (!badge) return;
+    const count = accounts.filter(a => a.status === 'error' || a.status === 'kicked').length;
+    if (count > 0) {
+        badge.textContent = count;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function updateClock() {
+    const el = document.getElementById('clockTime');
+    if (el) el.textContent = new Date().toLocaleTimeString('id-ID', { hour12: false });
+}
+
 function updateDashboard() {
     document.getElementById('statAccounts').textContent = accounts.length;
     const sa = document.getElementById('statAccounts');
     if (!sa.dataset.initial) {
         sa.dataset.initial = '1';
     }
+    const online = accounts.filter(a => a.status === 'online' || a.status === 'in_game').length;
+    const ingame = accounts.filter(a => a.status === 'in_game').length;
+    const error = accounts.filter(a => a.status === 'error' || a.status === 'kicked').length;
+    const onlineEl = document.getElementById('dashOnlineCount');
+    if (onlineEl) onlineEl.textContent = online;
+    const ingameEl = document.getElementById('dashIngameCount');
+    if (ingameEl) ingameEl.textContent = ingame;
+    const errorEl = document.getElementById('dashErrorCount');
+    if (errorEl) errorEl.textContent = error;
+    const totalEl = document.getElementById('dashTotalCount');
+    if (totalEl) totalEl.textContent = accounts.length;
 
 
-    document.getElementById('autoJoinEnabled').checked = settings.auto_join_enabled ?? true;
-    document.getElementById('rejoinDelay').value = settings.rejoin_delay ?? 3;
-    document.getElementById('maxRetries').value = settings.max_retries ?? 5;
-    document.getElementById('monitorInterval').value = settings.monitor_interval ?? 2;
-    document.getElementById('rejoinInterval').value = (settings.rejoin_interval ?? 2400) / 60;
-    document.getElementById('adbPath').value = settings.adb_path || '';
-    document.getElementById('webhookUrl').value = settings.webhook_url || '';
-    document.getElementById('webhookEnabled').checked = settings.webhook_enabled ?? false;
-    document.getElementById('autoRestartVM').checked = settings.auto_restart_vm ?? true;
-    const pwdInput = document.getElementById('dashboardPassword');
-    if (settings._has_password) {
-        pwdInput.placeholder = 'Password sudah diset — isi untuk mengganti';
-    } else {
-        pwdInput.placeholder = 'Biarkan kosong jika tidak ingin password';
+    const activeEl = document.activeElement;
+    const isInSettings = activeEl && activeEl.closest('.settings-content');
+    if (!isInSettings) {
+        document.getElementById('autoJoinEnabled').checked = settings.auto_join_enabled ?? true;
+        document.getElementById('rejoinDelay').value = settings.rejoin_delay ?? 3;
+        document.getElementById('maxRetries').value = settings.max_retries ?? 5;
+        document.getElementById('monitorInterval').value = settings.monitor_interval ?? 2;
+        document.getElementById('rejoinInterval').value = (settings.rejoin_interval ?? 2400) / 60;
+        document.getElementById('adbPath').value = settings.adb_path || '';
+        document.getElementById('webhookUrl').value = settings.webhook_url || '';
+        document.getElementById('webhookEnabled').checked = settings.webhook_enabled ?? false;
+        document.getElementById('autoRestartVM').checked = settings.auto_restart_vm ?? true;
+        document.getElementById('autoVerifyInterval').value = settings.auto_verify_interval ?? 0;
+        const discordFields = { discordClientId: 'discord_client_id', discordClientSecret: 'discord_client_secret', discordGuildId: 'discord_guild_id' };
+        Object.keys(discordFields).forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = settings[discordFields[id]] || '';
+        });
+        const deltaAuto = document.getElementById('deltaAutoKey');
+        if (deltaAuto) deltaAuto.checked = settings.delta_auto_key ?? false;
+        const dashboardUrl = document.getElementById('dashboardUrl');
+        if (dashboardUrl) dashboardUrl.value = settings.dashboard_url || 'http://localhost:5000';
+        
+        const pwdInput = document.getElementById('dashboardPassword');
+        if (settings._has_password) {
+            pwdInput.placeholder = 'Password sudah diset — isi untuk mengganti';
+        } else {
+            pwdInput.placeholder = 'Biarkan kosong jika tidak ingin password';
+        }
+        pwdInput.value = '';
+        document.getElementById('showPassword').checked = false;
+        document.getElementById('showPassword').onchange = function() {
+            const inp = document.getElementById('dashboardPassword');
+            inp.type = this.checked ? 'text' : 'password';
+        };
+        const hasPwd = settings._has_password;
+        document.getElementById('btnLogout').style.display = hasPwd ? '' : 'none';
+        document.getElementById('btnClearPassword').style.display = hasPwd ? '' : 'none';
+        const serials = settings.mumu_serials || [];
+        const container = document.getElementById('mumuSerialLabels');
+        if (container) {
+            let maxVms = Math.max(serials.length, 1);
+            container.innerHTML = '';
+            for (let i = 0; i < maxVms; i++) {
+                container.innerHTML += `
+                    <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">${getVmDisplayName(i)}</label>
+                        <input type="text" class="input mumu-serial" data-idx="${i}" placeholder="IP:5555" style="text-align:center;font-size:12px" value="${esc(serials[i] || '')}">
+                    </div>
+                `;
+            }
+        }
     }
-    pwdInput.value = '';
-    document.getElementById('showPassword').checked = false;
-    document.getElementById('showPassword').onchange = function() {
-        const inp = document.getElementById('dashboardPassword');
-        inp.type = this.checked ? 'text' : 'password';
-    };
-    const hasPwd = settings._has_password;
-    document.getElementById('btnLogout').style.display = hasPwd ? '' : 'none';
-    document.getElementById('btnClearPassword').style.display = hasPwd ? '' : 'none';
-    const serials = settings.mumu_serials || ['', '', '', '', ''];
-    document.querySelectorAll('.mumu-serial').forEach(el => {
-        const idx = parseInt(el.dataset.idx);
-        el.value = serials[idx] || '';
-    });
 
     updateADBStatus();
 
     const list = document.getElementById('dashAccountsList');
     if (accounts.length === 0) {
-        list.innerHTML = '<div class="empty-state">Belum ada account</div>';
+        list.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i> Belum ada account</div>';
     } else {
         list.innerHTML = accounts.slice(0, 5).map(a => {
         const inst = a.mumu_instance != null ? a.mumu_instance : '?';
@@ -277,9 +431,9 @@ function updateDashboard() {
 function updateSidebarActivity() {
     const list = document.getElementById('dashActivityList');
     if (activityLog.length === 0) {
-        list.innerHTML = '<div class="empty-state">Belum ada aktivitas</div>';
+        list.innerHTML = '<div class="empty-state"><i class="fas fa-history"></i> Belum ada aktivitas</div>';
     } else {
-        list.innerHTML = activityLog.map(a => `
+        list.innerHTML = activityLog.slice(0, 8).map(a => `
             <div class="activity-item activity-level-${a.level}">
                 <span class="activity-time">${esc(a.time)}</span>
                 <span class="activity-msg">${esc(a.msg)}</span>
@@ -291,19 +445,18 @@ function updateSidebarActivity() {
 function updateAccountsTable() {
     const tbody = document.getElementById('accountsTableBody');
     if (accounts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Belum ada account</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="fas fa-users"></i> Belum ada account</div></td></tr>';
         return;
     }
     tbody.innerHTML = accounts.map(a => {
         const aj = a.auto_join;
-        const autoSv = servers.find(s => s.id === a.server_id);
         const allSvs = (a.server_ids || []).map(id => servers.find(s => s.id === id)).filter(Boolean);
         const inst = (a.mumu_instance != null) ? a.mumu_instance : '-';
         const vmLabel = getVmDisplayName(inst);
         return `
         <tr>
-            <td><strong>${esc(a.name)}</strong></td>
-            <td>${getStatusBadge(a.status)} <span class="countdown"${a.next_rejoin_in != null ? ` data-seconds="${a.next_rejoin_in}"` : ''} style="font-size:10px;color:var(--text-muted)"><i class="fas fa-history"></i> <span class="cd-time">${formatCountdown(a.next_rejoin_in)}</span></span></td>
+            <td><strong style="cursor:pointer;color:var(--accent-1)" onclick="showAccountProfile('${a.id}')">${esc(a.name)} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:0.5"></i></strong></td>
+            <td>${getStatusBadge(a.status)}${renderDeltaKeyIcon(a)} <span class="countdown"${a.next_rejoin_in != null ? ` data-seconds="${a.next_rejoin_in}"` : ''} style="font-size:10px;color:var(--text-muted)"><i class="fas fa-history"></i> <span class="cd-time">${formatCountdown(a.next_rejoin_in)}</span></span></td>
             <td><span class="badge badge-info">${vmLabel}</span></td>
             <td style="font-size:11px">
                 ${allSvs.length ? allSvs.map(s =>
@@ -314,31 +467,32 @@ function updateAccountsTable() {
             </td>
             <td>${a.last_joined || '<span style="color:var(--text-muted)">-</span>'}</td>
             <td>
-                <div class="actions" style="flex-wrap:wrap">
-                    <button class="btn btn-sm ${aj ? 'btn-success' : 'btn-secondary'}" onclick="toggleAutoJoin('${a.id}', ${!aj})" title="Auto-Join ${aj ? 'ON' : 'OFF'}">
-                        <i class="fas fa-${aj ? 'toggle-on' : 'toggle-off'}"></i>
-                    </button>
-                    ${allSvs.filter(s => s.id !== a.server_id).slice(0, 2).map(s =>
-                        `<button class="btn btn-sm btn-outline" onclick="setAutoJoinServer('${a.id}', '${s.id}')" title="Auto-join: ${esc(s.name)}" style="font-size:10px;padding:2px 6px">${esc(s.name.slice(0, 6))}</button>`
-                    ).join('')}
-                    <button class="btn btn-sm ${a.active ? 'btn-danger' : 'btn-primary'}" onclick="${a.active ? `disconnectAccount('${a.id}')` : `joinAccount('${a.id}')`}">
-                        <i class="fas fa-${a.active ? 'stop' : 'play'}"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline" onclick="switchPage('logs');setTimeout(()=>selectAccountLog('${a.id}'),100)" title="Lihat Log">
-                        <i class="fas fa-clipboard-list"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline" onclick="pushScript('${a.id}')" title="Push script ke Delta Autoexecute">
-                        <i class="fas fa-upload"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline" onclick="verifyAccount('${a.id}')" title="Verify Cookie">
-                        <i class="fas fa-key"></i>
-                    </button>
-                    <button class="btn btn-sm btn-secondary" onclick="editAccount('${a.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteAccount('${a.id}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div class="actions">
+                    <div class="actions-primary">
+                        <button class="btn btn-sm ${aj ? 'btn-success' : 'btn-secondary'}" onclick="toggleAutoJoin('${a.id}', ${!aj})" title="Auto-Join ${aj ? 'ON' : 'OFF'}">
+                            <i class="fas fa-${aj ? 'toggle-on' : 'toggle-off'}"></i>
+                        </button>
+                        ${allSvs.filter(s => s.id !== a.server_id).slice(0, 1).map(s =>
+                            `<button class="btn btn-sm btn-outline" onclick="setAutoJoinServer('${a.id}', '${s.id}')" title="Auto-join: ${esc(s.name)}" style="font-size:10px;padding:2px 6px">${esc(s.name.slice(0, 6))}</button>`
+                        ).join('')}
+                        <button class="btn btn-sm ${a.active ? 'btn-danger' : 'btn-primary'}" onclick="${a.active ? `disconnectAccount('${a.id}')` : `joinAccount('${a.id}')`}">
+                            <i class="fas fa-${a.active ? 'stop' : 'play'}"></i>
+                        </button>
+                    </div>
+                    <div class="actions-more">
+                        <button class="actions-more-btn" onclick="toggleActionsMenu(this)" title="More actions">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="actions-dropdown">
+                            <button class="btn" onclick="deltaRefreshKey('${a.id}')"><i class="fas fa-key"></i> Delta Key</button>
+                            <button class="btn" onclick="switchPage('logs');setTimeout(()=>selectAccountLog('${a.id}'),100)"><i class="fas fa-clipboard-list"></i> Logs</button>
+                            <button class="btn" onclick="pushScript('${a.id}')"><i class="fas fa-upload"></i> Push Script</button>
+                            <button class="btn" onclick="verifyAccount('${a.id}')"><i class="fas fa-check-circle"></i> Verify</button>
+                            <button class="btn" onclick="editAccount('${a.id}')"><i class="fas fa-edit"></i> Edit</button>
+                            <button class="btn" onclick="moveAccountVM('${a.id}', '${esc(a.name)}', ${a.mumu_instance != null ? a.mumu_instance : 0})"><i class="fas fa-desktop"></i> Pindah VM</button>
+                            <button class="btn btn-danger" onclick="deleteAccount('${a.id}')"><i class="fas fa-trash"></i> Delete</button>
+                        </div>
+                    </div>
                 </div>
             </td>
         </tr>
@@ -348,17 +502,29 @@ function updateAccountsTable() {
 function updateServersTable() {
     const tbody = document.getElementById('serversTableBody');
     if (servers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Belum ada server</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-server"></i> Belum ada server</div></td></tr>';
         return;
     }
     tbody.innerHTML = servers.map(s => `
         <tr>
-            <td><strong>${esc(s.name)}</strong></td>
+            <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div class="game-thumb" data-place="${esc(s.place_id)}" style="width:32px;height:32px;border-radius:5px;background:var(--bg-card);border:1px solid var(--border-color);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted);overflow:hidden">
+                        ${renderGameThumb(s.place_id)}
+                    </div>
+                    <div>
+                        <strong>${esc(s.name)}</strong>
+                        <div class="game-info-text" data-place="${esc(s.place_id)}" style="font-size:10px;color:var(--text-muted)">${renderGameInfoText(s.place_id)}</div>
+                    </div>
+                </div>
+            </td>
             <td>${s.type === 'private'
                 ? '<span class="badge badge-warning">Private</span>'
                 : '<span class="badge badge-info">Public</span>'}</td>
-            <td>${esc(s.place_id || '-')}</td>
-            <td style="font-size:12px;color:var(--text-muted)">${esc(s.link || s.server_code || '-')}</td>
+            <td style="font-size:11px;font-family:var(--font-mono)">${esc(s.place_id || '-')}</td>
+            <td style="font-size:11px;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                ${s.server_code ? `<span title="${esc(s.server_code)}">${esc(s.server_code.slice(0, 12))}...</span>` : '-'}
+            </td>
             <td>
                 <div class="actions">
                     <button class="btn btn-sm btn-secondary" onclick="editServer('${s.id}')">
@@ -371,12 +537,76 @@ function updateServersTable() {
             </td>
         </tr>
     `).join('');
+    loadServerGameInfo();
+}
+
+const gameInfoCache = {};
+function renderGameThumb(placeId) {
+    const info = gameInfoCache[placeId];
+    if (info && info.thumbnail) return `<img src="${esc(info.thumbnail)}" style="width:32px;height:32px;object-fit:cover">`;
+    return '<i class="fas fa-gamepad"></i>';
+}
+function renderGameInfoText(placeId) {
+    const info = gameInfoCache[placeId];
+    if (info) {
+        const parts = [];
+        if (info.game_name) parts.push(esc(info.game_name).slice(0, 20));
+        if (info.player_count != null) parts.push(`<span style="color:var(--green)">${info.player_count} playing</span>`);
+        return parts.length ? parts.join(' &middot; ') : '<span style="color:var(--text-muted)">No data</span>';
+    }
+    return '<i class="fas fa-spinner fa-pulse" style="font-size:8px"></i>';
+}
+function renderDeltaKeyIcon(a) {
+    const dk = a.delta_key || {};
+    if (dk.has_key && dk.expires_in != null && dk.expires_in > 0) {
+        const h = Math.floor(dk.expires_in / 3600);
+        const m = Math.floor((dk.expires_in % 3600) / 60);
+        return `<span title="Delta Key: ${h}h ${m}m lagi" style="font-size:10px;color:var(--green);margin-left:4px"><i class="fas fa-key"></i></span>`;
+    }
+    if (dk.has_key && dk.expires_in != null && dk.expires_in <= 0) {
+        return `<span title="Delta Key expired" style="font-size:10px;color:var(--red);margin-left:4px"><i class="fas fa-key"></i></span>`;
+    }
+    return '';
+}
+async function loadServerGameInfo() {
+    const thumbs = document.querySelectorAll('.game-thumb[data-place]');
+    const texts = document.querySelectorAll('.game-info-text[data-place]');
+    const placeIds = [...new Set([...thumbs].map(el => el.dataset.place).filter(Boolean))];
+    for (const pid of placeIds) {
+        if (!pid || pid === '-') continue;
+        let info;
+        if (gameInfoCache[pid]) {
+            info = gameInfoCache[pid];
+        } else {
+            const res = await api('GET', `/api/game-info?place_id=${pid}`);
+            if (res && res.info) {
+                info = res.info;
+                gameInfoCache[pid] = info;
+            }
+        }
+        if (info) {
+            thumbs.forEach(el => {
+                if (el.dataset.place === pid) {
+                    if (info.thumbnail) el.innerHTML = `<img src="${esc(info.thumbnail)}" style="width:32px;height:32px;object-fit:cover">`;
+                    else el.innerHTML = '<i class="fas fa-gamepad" style="font-size:13px;color:var(--accent-1)"></i>';
+                }
+            });
+            texts.forEach(el => {
+                if (el.dataset.place === pid) {
+                    const parts = [];
+                    if (info.game_name) parts.push(esc(info.game_name).slice(0, 20));
+                    if (info.player_count != null) parts.push(`<span style="color:var(--green)">${info.player_count} playing</span>`);
+                    el.innerHTML = parts.length ? parts.join(' &middot; ') : '<span style="color:var(--text-muted)">No data</span>';
+                }
+            });
+        }
+    }
 }
 
 function updateActivityLog() {
     const container = document.getElementById('activityLog');
     if (activityLog.length === 0) {
-        container.innerHTML = '<div class="empty-state">Belum ada aktivitas</div>';
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-history"></i> Belum ada aktivitas</div>';
         return;
     }
     container.innerHTML = activityLog.map(a => `
@@ -385,6 +615,70 @@ function updateActivityLog() {
             <span class="activity-msg">${esc(a.msg)}</span>
         </div>
     `).join('');
+}
+
+function updateInventory() {
+    const grid = document.getElementById('inventoryGrid');
+    if (!grid) return;
+    const accNames = Object.keys(inventoryData);
+    if (accNames.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i> Belum ada data inventory</div>';
+        return;
+    }
+    grid.innerHTML = accNames.map(name => {
+        const data = inventoryData[name];
+        const items = data.items || [];
+        const categories = {};
+        items.forEach(item => {
+            let cat = 'Other';
+            const lname = item.name.toLowerCase();
+            if (['shovel','trowel','watering can','axe','pickaxe','megaphone','build','teleporter','rake','hoe'].some(t => lname.includes(t))) cat = 'Tools';
+            else if (['sprinkler'].some(t => lname.includes(t))) cat = 'Sprinklers';
+            else if (['seed','plant','flower','tree','mushroom','bamboo','tomato','corn','tulip','blueberry','carrot','sunflower','cactus','strawberry','pineapple','apple','dragon fruit','poison apple','moon bloom','rare seed','common seed','uncommon seed','legendary seed'].some(t => lname.includes(t))) cat = 'Seeds & Plants';
+            else if (['gnome','fountain','bench','statue','lamp','decoration','path','fence','pond','bridge'].some(t => lname.includes(t))) cat = 'Decorations';
+            else if (['golden','rainbow','mega','gold','diamond','crystal','neon','legendary','mythic'].some(t => lname.includes(t))) cat = 'Special';
+            else if (['bear','bunny','turtle','robin','deer','unicorn','owl','frog','dragonfly','cat','dog','bird','hamster','butterfly','bee','fox','wolf','dragon','phoenix'].some(t => lname.includes(t))) cat = 'Animals';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(item);
+        });
+        const sheckles = data.sheckles || 0;
+        const shecklesFormatted = sheckles > 0 ? sheckles.toLocaleString() : '0';
+        return `
+        <div class="inventory-card">
+            <div class="inventory-header">
+                <div class="inventory-avatar">${name.charAt(0).toUpperCase()}</div>
+                <div class="inventory-info">
+                    <div class="inventory-name">${esc(name)}</div>
+                    <div class="inventory-meta">${items.length} item types · ${data.total || 0} total items</div>
+                    <div class="inventory-sheckles"><i class="fas fa-coins" style="color:var(--yellow)"></i> ${shecklesFormatted} Sheckles</div>
+                </div>
+            </div>
+            <div class="inventory-items">
+                ${Object.entries(categories).map(([cat, catItems]) => `
+                    <div class="inventory-category">
+                        <div class="inventory-category-title">${cat} (${catItems.length})</div>
+                        <div class="inventory-item-list">
+                            ${catItems.map(item => {
+                                const thumb = item.thumbnail || itemThumbnails[item.name] || '';
+                                const imgHtml = thumb ? `<img src="${esc(thumb)}" class="item-thumb" onerror="this.style.display='none'" loading="lazy">` : '';
+                                return `
+                                <span class="inventory-item ${item.equipped ? 'equipped' : ''}">
+                                    ${imgHtml}
+                                    <span class="item-name">${esc(item.name)}</span>${item.count > 1 ? ` <span class="item-count">x${item.count}</span>` : ''}
+                                </span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function refreshInventory() {
+    const inv = await api('GET', '/api/inventory');
+    if (inv) inventoryData = inv;
+    updateInventory();
 }
 
 function updateAccountSelect() {
@@ -399,19 +693,22 @@ function updateAccountSelect() {
         container.innerHTML = servers.map(s => {
             const checked = selectedIds.includes(s.id) ? 'checked' : '';
             const isAuto = autoId === s.id;
+            const typeBadge = s.type === 'private' ? '<span class="badge badge-warning">Private</span>' : '<span class="badge badge-info">Public</span>';
             return `
-            <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:12px">
+            <label class="server-check-item">
                 <input type="checkbox" class="server-check" value="${s.id}" ${checked} onchange="updateServerCheck(this)">
-                <span style="flex:1">${esc(s.name)}</span>
-                <input type="radio" name="autoServer" value="${s.id}" ${isAuto ? 'checked' : ''} ${!checked ? 'disabled' : ''} title="Auto-join target">
-                <span style="font-size:10px;color:var(--text-muted)">auto</span>
+                <span>${esc(s.name)}</span>
+                ${typeBadge}
+                <input type="radio" name="autoServer" value="${s.id}" ${isAuto ? 'checked' : ''} ${!checked ? 'disabled' : ''} title="Auto-join target" style="margin-left:auto">
+                <span style="font-size:10px;color:var(--text-muted);margin-left:2px">auto</span>
             </label>`;
         }).join('');
     }
 
     const instSel = document.getElementById('accInstance');
     const curInst = instSel.value;
-    const serials = settings.mumu_serials || ['', '', '', '', ''];
+    const serials = settings.mumu_serials || [];
+    if (serials.length === 0) serials.push('');
     instSel.innerHTML = serials.map((s, i) => {
         const vm = getVmDisplayName(i);
         const label = s ? `${vm} (${s})` : `${vm} (kosong)`;
@@ -488,6 +785,90 @@ function openModal(id) {
     document.getElementById(id).classList.add('active');
 }
 
+let _dynamicModal = null;
+function showModal(html) {
+    if (_dynamicModal) { _dynamicModal.remove(); _dynamicModal = null; }
+    const div = document.createElement('div');
+    div.className = 'modal active';
+    div.style.display = 'flex';
+    div.innerHTML = `<div class="modal-content" style="max-width:380px">${html}</div>`;
+    div.addEventListener('click', function(e) { if (e.target === this) closeDynamicModal(); });
+    document.body.appendChild(div);
+    _dynamicModal = div;
+}
+function closeDynamicModal() {
+    if (_dynamicModal) { _dynamicModal.remove(); _dynamicModal = null; }
+}
+
+async function scanVmCookies() {
+    const btn = document.getElementById('btnScanCookies');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Scanning...';
+    showModal('<div style="text-align:center"><i class="fas fa-spinner fa-pulse" style="font-size:24px"></i><p style="margin-top:12px">Memindai cookie dari semua VM...</p></div>');
+    try {
+        const res = await api('POST', '/api/accounts/scan-vm', {});
+        if (!res) { closeDynamicModal(); alert('Gagal menghubungi server'); return; }
+        let html = '<div style="max-height:400px;overflow-y:auto">';
+        html += `<p style="margin-bottom:10px;font-size:13px"><strong>Ditambahkan:</strong> ${res.added} &middot; <strong>Sudah ada:</strong> ${res.already_exist}</p>`;
+        for (const r of res.results || []) {
+            const icon = r.status === 'added' ? '<i class="fas fa-check-circle" style="color:var(--green)"></i>'
+                : r.status === 'exists' ? '<i class="fas fa-info-circle" style="color:var(--accent-2)"></i>'
+                : r.status === 'not_found' ? '<i class="fas fa-search" style="color:var(--text-muted)"></i>'
+                : '<i class="fas fa-times-circle" style="color:var(--red)"></i>';
+            html += `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-color);font-size:12px">
+                ${icon}
+                <div><strong>${esc(r.vm)}</strong> — ${esc(r.message)}</div>
+            </div>`;
+        }
+        html += '</div>';
+        html += `<div style="margin-top:12px;text-align:center"><button class="btn btn-primary" onclick="closeDynamicModal();refreshData()"><i class="fas fa-sync"></i> Refresh</button></div>`;
+        closeDynamicModal();
+        showModal(html);
+    } catch (e) {
+        closeDynamicModal();
+        showModal(`<div style="text-align:center;color:var(--red)"><i class="fas fa-exclamation-triangle" style="font-size:24px"></i><p>${esc(e.message || 'Error')}</p></div>`);
+    }
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Scan & Import';
+}
+
+async function scanServersFromAccounts() {
+    const btn = document.getElementById('btnScanServers');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Scanning...';
+    showModal('<div style="text-align:center"><i class="fas fa-spinner fa-pulse" style="font-size:24px"></i><p style="margin-top:12px">Memindai game dari semua akun...</p></div>');
+    try {
+        const res = await api('POST', '/api/servers/scan-from-accounts', {});
+        if (!res) { closeDynamicModal(); alert('Gagal menghubungi server'); return; }
+        let html = '<div style="max-height:400px;overflow-y:auto">';
+        html += `<p style="margin-bottom:10px;font-size:13px"><strong>Ditambahkan:</strong> ${res.added} &middot; <strong>Sudah ada:</strong> ${res.already_exist}</p>`;
+        for (const r of res.results || []) {
+            const icon = r.status === 'added' ? '<i class="fas fa-check-circle" style="color:var(--green)"></i>'
+                : r.status === 'exists' ? '<i class="fas fa-info-circle" style="color:var(--accent-2)"></i>'
+                : '<i class="fas fa-times-circle" style="color:var(--text-muted)"></i>';
+            html += `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-color);font-size:12px">
+                ${icon}
+                <div><strong>${esc(r.account)}</strong> — ${esc(r.message)}</div>
+            </div>`;
+        }
+        html += '</div>';
+        html += `<div style="margin-top:12px;text-align:center"><button class="btn btn-primary" onclick="closeDynamicModal();switchPage('servers');refreshData()"><i class="fas fa-sync"></i> Refresh</button></div>`;
+        closeDynamicModal();
+        showModal(html);
+    } catch (e) {
+        closeDynamicModal();
+        showModal(`<div style="text-align:center;color:var(--red)"><i class="fas fa-exclamation-triangle" style="font-size:24px"></i><p>${esc(e.message || 'Error')}</p></div>`);
+    }
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Scan dari Akun';
+}
+
+async function deltaRefreshKey(accId) {
+    const res = await api('POST', `/api/delta/refresh-key/${accId}`, {});
+    if (res && res.success) {
+        showToast(`Delta Key refreshed: ${res.key_preview || 'OK'}`, 'success');
+    } else {
+        showToast(`Delta Key error: ${(res && res.error) || 'Unknown'}`, 'error');
+    }
+    refreshData();
+}
+
 function showAddAccount() {
     document.getElementById('accountModalTitle').textContent = 'Tambah Account';
     document.getElementById('editAccountId').value = '';
@@ -496,6 +877,11 @@ function showAddAccount() {
     document.getElementById('accInstance').value = '0';
     openModal('accountModal');
     updateAccountSelect();
+}
+
+function updateServerCheck(el) {
+    const radio = el.closest('.server-check-item').querySelector('input[name="autoServer"]');
+    if (radio) radio.disabled = !el.checked;
 }
 
 function getServerCheckData() {
@@ -540,10 +926,141 @@ async function editAccount(id) {
     updateAccountSelect();
 }
 
+async function showAccountProfile(accId) {
+    const acc = accounts.find(a => a.id === accId);
+    if (!acc) return;
+    showModal(`<div style="text-align:center;margin-bottom:12px"><i class="fas fa-spinner fa-pulse" style="font-size:32px;color:var(--accent-1)"></i></div><p style="text-align:center;color:var(--text-muted);font-size:13px">Loading profile...</p>`);
+    const res = await api('GET', `/api/accounts/${accId}/profile`);
+    closeDynamicModal();
+    if (!res || !res.profile) { showToast('Gagal load profile', 'error'); return; }
+    const p = res.profile;
+    const presenceLabels = {0: 'Offline', 1: 'Online', 2: 'In Game', 3: 'Studio'};
+    const presenceColors = {0: 'var(--red)', 1: 'var(--green)', 2: '#5865f2', 3: 'var(--yellow)'};
+    const ptype = p.presence_type || 0;
+    showModal(`
+        <div style="text-align:center">
+            <img src="${esc(p.avatar)}" style="width:80px;height:80px;border-radius:50%;border:3px solid var(--accent-1);margin-bottom:8px" onerror="this.outerHTML='<div style=\\'width:80px;height:80px;border-radius:50%;background:var(--bg-input);border:3px solid var(--accent-1);display:flex;align-items:center;justify-content:center;margin:0 auto 8px\\'><i class=\\'fas fa-user\\' style=\\'font-size:28px;color:var(--text-muted)\\'>'">
+            <h3 style="font-size:16px;font-weight:700">${esc(p.username)}</h3>
+            ${p.display_name && p.display_name !== p.username ? `<div style="font-size:12px;color:var(--text-muted)">${esc(p.display_name)}</div>` : ''}
+            <div style="margin-top:6px">
+                <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;background:${presenceColors[ptype]}22;color:${presenceColors[ptype]};border:1px solid ${presenceColors[ptype]}44">
+                    <span style="width:6px;height:6px;border-radius:50%;background:${presenceColors[ptype]}"></span>
+                    ${presenceLabels[ptype]}
+                </span>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 0">
+            <div style="text-align:center;padding:8px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border-color)">
+                <div style="font-size:16px;font-weight:700;color:var(--yellow)">${p.robux != null ? p.robux.toLocaleString() : '?'}</div>
+                <div style="font-size:10px;color:var(--text-muted)">Robux</div>
+            </div>
+            <div style="text-align:center;padding:8px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border-color)">
+                <div style="font-size:16px;font-weight:700">${p.friend_count != null ? p.friend_count.toLocaleString() : '?'}</div>
+                <div style="font-size:10px;color:var(--text-muted)">Friends</div>
+            </div>
+            <div style="text-align:center;padding:8px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border-color)">
+                <div style="font-size:16px;font-weight:700">${p.created ? p.created : '?'}</div>
+                <div style="font-size:10px;color:var(--text-muted)">Joined</div>
+            </div>
+        </div>
+        ${p.description ? `<div style="font-size:11px;color:var(--text-muted);padding:8px;background:var(--bg-input);border-radius:5px;margin-bottom:10px;border:1px solid var(--border-color);text-align:center">${esc(p.description)}</div>` : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
+            <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px;border:1px solid var(--border-color)">
+                <span style="color:var(--text-muted)">Status</span>
+                <div style="font-weight:600">${getStatusBadge(p.status)}</div>
+            </div>
+            <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px;border:1px solid var(--border-color)">
+                <span style="color:var(--text-muted)">VM</span>
+                <div style="font-weight:600">${esc(getVmDisplayName(p.mumu_instance))}</div>
+            </div>
+            <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px;border:1px solid var(--border-color)">
+                <span style="color:var(--text-muted)">Last Join</span>
+                <div style="font-weight:600">${p.last_joined || '-'}</div>
+            </div>
+            <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px;border:1px solid var(--border-color)">
+                <span style="color:var(--text-muted)">Auto-Join</span>
+                <div style="font-weight:600">${p.auto_join ? '<span style="color:var(--green)">ON</span>' : '<span style="color:var(--text-muted)">OFF</span>'}</div>
+            </div>
+        </div>
+        <div style="text-align:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--border-color)">
+            <button class="btn btn-secondary" onclick="closeDynamicModal()">Tutup</button>
+        </div>
+    `);
+}
+
+async function moveAccountVM(id, name, currentVm) {
+    const serials = settings.mumu_serials || [];
+    const vmCount = Math.max(serials.length, 1);
+    const vms = [];
+    for (let i = 0; i < vmCount; i++) vms.push(getVmDisplayName(i));
+    const sel = vms.map((v, i) =>
+        `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;border-radius:5px;${i === currentVm ? 'background:var(--accent-subtle)' : ''}">
+            <input type="radio" name="vmChoice" value="${i}" ${i === currentVm ? 'checked' : ''}>
+            <span style="font-size:13px">${esc(v)}</span>
+            ${i === currentVm ? '<span style="font-size:10px;color:var(--text-muted)">(current)</span>' : ''}
+        </label>`
+    ).join('');
+    showModal(`
+        <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:28px;margin-bottom:8px"><i class="fas fa-desktop" style="color:var(--accent-1)"></i></div>
+            <h3 style="font-size:16px;font-weight:600">Pindah VM</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:4px">${esc(name)}</p>
+        </div>
+        <div style="display:grid;gap:4px">${sel}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border-color)">
+            <button class="btn btn-secondary" onclick="closeDynamicModal()">Batal</button>
+            <button class="btn btn-primary" id="btnMoveVM" onclick="closeDynamicModal();doMoveVM('${id}', parseInt(document.querySelector('input[name=vmChoice]:checked').value))"><i class="fas fa-check"></i> Pindah</button>
+        </div>
+    `);
+}
+
+async function doMoveVM(id, instance) {
+    const res = await api('POST', `/api/accounts/${id}/move-vm`, { mumu_instance: instance });
+    if (res && res.mumu_instance != null) {
+        showToast(`Dipindah ke VM ${instance}`, 'success');
+        await refreshData();
+        refreshMuMuVMs();
+    } else {
+        showToast('Gagal pindah VM', 'error');
+    }
+}
+
 async function deleteAccount(id) {
     if (!confirm('Hapus account ini?')) return;
     await api('DELETE', `/api/accounts/${id}`);
     await refreshData();
+}
+
+let _gameSearchTimeout = null;
+async function searchGame(q) {
+    clearTimeout(_gameSearchTimeout);
+    const container = document.getElementById('svGameResults');
+    if (q.length < 2) { container.style.display = 'none'; return; }
+    _gameSearchTimeout = setTimeout(async () => {
+        const res = await api('GET', `/api/games/search?q=${encodeURIComponent(q)}`);
+        if (!res || !res.results || res.results.length === 0) {
+            container.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:12px">Game tidak ditemukan</div>';
+            container.style.display = 'block';
+            return;
+        }
+        container.innerHTML = res.results.map(g => `
+            <div class="server-check-item" style="cursor:pointer" onclick="selectGame(${g.place_id}, '${esc(g.name)}')">
+                <div style="display:flex;align-items:center;gap:8px">
+                    ${g.thumbnail ? `<img src="${esc(g.thumbnail)}" style="width:28px;height:28px;border-radius:4px;object-fit:cover">` : '<i class="fas fa-gamepad" style="width:28px;text-align:center;color:var(--text-muted)"></i>'}
+                    <div>
+                        <strong style="font-size:12px">${esc(g.name)}</strong>
+                        <div style="font-size:10px;color:var(--text-muted)">${g.player_count} playing &middot; ID: ${g.place_id}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        container.style.display = 'block';
+    }, 300);
+}
+function selectGame(placeId, name) {
+    document.getElementById('svPlaceId').value = placeId;
+    document.getElementById('svName').value = name;
+    document.getElementById('svGameResults').style.display = 'none';
 }
 
 function showAddServer() {
@@ -554,8 +1071,12 @@ function showAddServer() {
     document.getElementById('svPlaceId').value = '';
     document.getElementById('svCode').value = '';
     document.getElementById('svLink').value = '';
+    document.getElementById('svGameSearch').value = '';
+    document.getElementById('svGameResults').style.display = 'none';
+    document.getElementById('svGameResults').innerHTML = '';
     toggleServerFields();
     openModal('serverModal');
+    setTimeout(() => document.getElementById('svGameSearch').focus(), 200);
 }
 
 async function saveServer() {
@@ -641,27 +1162,32 @@ async function injectAccount(accId) {
     refreshData();
 }
 
-async function toggleAutoJoin(accId, enabled) {
-    await api('POST', `/api/accounts/${accId}/auto-join`, { auto_join: enabled });
-    refreshData();
-}
-
-async function setAutoJoinServer(accId, serverId) {
-    await api('POST', `/api/accounts/${accId}/auto-join`, { server_id: serverId });
-    refreshData();
-}
 
 async function joinAccount(accId) {
+    const acc = accounts.find(a => a.id === accId);
     const res = await api('POST', `/api/accounts/${accId}/join`);
     if (res && res.status === 'joining') {
         await refreshData();
-        showToast(`Join ${acc.name || accId}...`, 'info');
+        showToast(`Join ${acc?.name || accId}...`, 'info');
     }
 }
 
 async function disconnectAccount(accId) {
     await api('POST', `/api/accounts/${accId}/disconnect`);
     await refreshData();
+}
+
+async function toggleAutoJoin(accId, enabled) {
+    await api('POST', `/api/accounts/${accId}/auto-join`, { auto_join: enabled });
+    if (enabled) {
+        await api('PUT', '/api/settings', { auto_join_enabled: true });
+    }
+    refreshData();
+}
+
+async function setAutoJoinServer(accId, serverId) {
+    await api('POST', `/api/accounts/${accId}/auto-join`, { server_id: serverId });
+    refreshData();
 }
 
 async function joinAllAccounts() {
@@ -677,6 +1203,7 @@ async function saveSettings() {
     document.querySelectorAll('.mumu-serial').forEach(el => {
         serials.push(el.value.trim() || '');
     });
+    
     const data = {
         auto_join_enabled: document.getElementById('autoJoinEnabled').checked,
         rejoin_delay: parseInt(document.getElementById('rejoinDelay').value) || 3,
@@ -687,7 +1214,13 @@ async function saveSettings() {
         mumu_serials: serials,
         webhook_url: document.getElementById('webhookUrl').value.trim(),
         webhook_enabled: document.getElementById('webhookEnabled').checked,
-        auto_restart_vm: document.getElementById('autoRestartVM').checked
+        auto_restart_vm: document.getElementById('autoRestartVM').checked,
+        discord_client_id: document.getElementById('discordClientId').value.trim(),
+        discord_client_secret: document.getElementById('discordClientSecret').value.trim(),
+        discord_guild_id: document.getElementById('discordGuildId').value.trim(),
+        auto_verify_interval: parseInt(document.getElementById('autoVerifyInterval').value) || 0,
+        delta_auto_key: document.getElementById('deltaAutoKey').checked,
+        dashboard_url: document.getElementById('dashboardUrl').value.trim() || 'http://localhost:5000',
     };
     const pwd = document.getElementById('dashboardPassword').value.trim();
     if (pwd) data.dashboard_password = pwd;
@@ -695,6 +1228,9 @@ async function saveSettings() {
     if (res && !res._error) {
         Object.assign(settings, res);
         try { updateDashboard(); } catch(e) {}
+        showToast('Settings saved!', 'success');
+    } else {
+        showToast('Gagal simpan settings', 'error');
     }
 }
 
@@ -814,7 +1350,40 @@ async function pushScript(accId) {
     btn.disabled = false;
 }
 
-let logRefreshInterval = null;
+async function pushScriptToAll() {
+    if (!confirm('Push script ke SEMUA instance yang aktif dan memiliki Roblox running?')) return;
+    const btn = document.getElementById('btnPushAll');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pushing...';
+    btn.disabled = true;
+    try {
+        const res = await api('POST', '/api/push-all-active');
+        if (res && res.results) {
+            let html = '<div style="max-height:400px;overflow-y:auto">';
+            html += `<p style="margin-bottom:10px;font-size:13px"><strong>Berhasil:</strong> ${res.pushed} / ${res.total} instance</p>`;
+            for (const r of res.results) {
+                const icon = r.status === 'ok' ? '<i class="fas fa-check-circle" style="color:var(--green)"></i>'
+                    : r.status === 'skipped' ? '<i class="fas fa-minus-circle" style="color:var(--text-muted)"></i>'
+                    : '<i class="fas fa-times-circle" style="color:var(--red)"></i>';
+                html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-color);font-size:12px">
+                    ${icon}
+                    <span style="min-width:80px;font-weight:600">#${r.instance}</span>
+                    <span style="flex:1">${esc(r.message)}${r.account ? ` (${esc(r.account)})` : ''}</span>
+                </div>`;
+            }
+            html += '</div>';
+            html += `<div style="margin-top:12px;text-align:center"><button class="btn btn-primary" onclick="closeDynamicModal()"><i class="fas fa-check"></i> OK</button></div>`;
+            showModal(html);
+            showToast(`Script pushed ke ${res.pushed} instance`, 'success');
+        } else {
+            showToast('Gagal: ' + (res?.error || 'server error'), 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+    btn.innerHTML = orig;
+    btn.disabled = false;
+}
 
 function populateLogAccountSelect() {
     const sel = document.getElementById('logAccountSelect');
@@ -827,18 +1396,18 @@ function populateLogAccountSelect() {
 async function loadAccountLogs(accId) {
     const container = document.getElementById('accountLogsContainer');
     if (!accId) {
-        container.innerHTML = '<div class="empty-state">Pilih account untuk melihat log</div>';
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i> Pilih account untuk melihat log</div>';
         return;
     }
     const res = await api('GET', `/api/accounts/${accId}/logs`);
     if (!res) {
-        container.innerHTML = '<div class="empty-state">Gagal memuat log</div>';
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i> Gagal memuat log</div>';
         return;
     }
     document.getElementById('logAccountSelect').value = accId;
     const logs = res.logs || [];
     if (logs.length === 0) {
-        container.innerHTML = '<div class="empty-state">Belum ada log untuk account ini</div>';
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i> Belum ada log untuk account ini</div>';
         return;
     }
     container.innerHTML = '<div style="display:flex;flex-direction:column;gap:4px">' +
@@ -857,34 +1426,29 @@ async function clearAccountLogs() {
     const sel = document.getElementById('logAccountSelect');
     if (!sel.value) return;
     if (!confirm('Hapus semua log untuk account ini?')) return;
-    await api('DELETE', `/api/activity`);
-    document.getElementById('accountLogsContainer').innerHTML = '<div class="empty-state">Log dibersihkan</div>';
+    await api('DELETE', `/api/activity?account_id=${sel.value}`);
+    document.getElementById('accountLogsContainer').innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i> Log dibersihkan</div>';
 }
 
 function refreshAllScreenshots() {
     const grid = document.getElementById('screenshotGrid');
-    const serials = [];
-    document.querySelectorAll('.mumu-serial').forEach(el => {
-        serials.push(el.value.trim() || '');
-    });
+    const serials = settings.mumu_serials || [];
     grid.innerHTML = '';
     serials.forEach((s, i) => {
-        const label = document.querySelector(`[data-vmidx="${i}"]`);
-        const name = label ? label.textContent : `MuMu-${i}`;
+        const name = getVmDisplayName(i);
         if (!s) return;
         const card = document.createElement('div');
-        card.style.cssText = 'background:var(--bg-input);border-radius:8px;border:1px solid var(--border-color);overflow:hidden';
-        const header = document.createElement('div');
-        header.style.cssText = 'padding:6px 10px;font-size:12px;font-weight:500;color:var(--text-secondary);display:flex;justify-content:space-between;align-items:center';
-        header.innerHTML = `<span>${esc(name)}</span><span style="font-size:10px;color:var(--text-muted)">${esc(s)}</span>`;
-        card.appendChild(header);
-        const img = document.createElement('img');
-        img.src = `/api/mumu/${i}/screenshot?t=${Date.now()}`;
-        img.style.cssText = 'width:100%;display:block;image-rendering:pixelated';
-        img.onerror = function () {
-            this.parentElement.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px"><i class="fas fa-exclamation-triangle"></i> Screenshot failed</div>';
-        };
-        card.appendChild(img);
+        card.className = 'screenshot-card';
+        card.innerHTML = `
+            <img src="/api/mumu/${i}/screenshot?t=${Date.now()}" style="width:100%;display:block;image-rendering:pixelated" onerror="this.parentElement.innerHTML='<div style=\\'padding:40px;text-align:center;color:var(--red);font-size:13px\\'><i class=\\'fas fa-exclamation-triangle\\'></i> Screenshot failed</div>'">
+            <div class="screenshot-overlay">
+                <div class="screenshot-info">
+                    <span class="screenshot-name">${esc(name)}</span>
+                    <span class="screenshot-serial">${esc(s)}</span>
+                </div>
+                <span class="screenshot-time">${new Date().toLocaleTimeString()}</span>
+            </div>
+        `;
         grid.appendChild(card);
     });
 }
@@ -927,20 +1491,27 @@ async function scanADBSerials() {
     const res = await api('GET', '/api/mumu/scan');
     btn.innerHTML = orig;
     btn.disabled = false;
-    if (res && res.devices && res.devices.length > 0) {
-        const inputs = document.querySelectorAll('.mumu-serial');
+    if (res && res.mumu_serials) {
+        const container = document.getElementById('mumuSerialLabels');
+        if (container) {
+            container.innerHTML = '';
+            res.mumu_serials.forEach((s, i) => {
+                container.innerHTML += `
+                    <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">${getVmDisplayName(i)}</label>
+                        <input type="text" class="input mumu-serial" data-idx="${i}" placeholder="IP:5555" style="text-align:center;font-size:12px" value="${esc(s)}">
+                    </div>
+                `;
+            });
+        }
         const lines = [];
-        res.mumu_serials.forEach((s, i) => {
-            if (i < inputs.length) {
-                inputs[i].value = s;
-            }
-        });
-        for (const d of res.devices) {
+        for (const d of (res.devices || [])) {
             lines.push(`${d.name} → ${d.serial}`);
         }
         showToast('Scan selesai! ' + res.devices.length + ' device ditemukan', 'success');
         await saveSettings();
-    } else {
+    } else if (res && res._error) {
+        showToast('Scan gagal: ' + res._statusText, 'error');
         showToast('Tidak ada device ADB terdeteksi', 'warning');
     }
 }
@@ -967,51 +1538,89 @@ async function restartMuMuVM(vmName) {
 }
 async function refreshMuMuVMs() {
     const container = document.getElementById('mumuVMList');
-    container.innerHTML = '<div class="empty-state">Loading VMs...</div>';
-    const res = await api('GET', '/api/mumu/vms');
+    container.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading VMs...</div>';
+    const [res, healthRes] = await Promise.all([
+        api('GET', '/api/mumu/vms'),
+        api('GET', '/api/mumu/health')
+    ]);
     if (!res || !res.vms) {
-        container.innerHTML = '<div class="empty-state">MuMuVMM tidak ditemukan</div>';
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-desktop"></i> MuMuVMM tidak ditemukan</div>';
         return;
     }
-    container.innerHTML = res.vms.map((vm, i) => {
+    const healthMap = {};
+    if (healthRes && healthRes.health) {
+        healthRes.health.forEach(h => { healthMap[h.instance] = h; });
+    }
+    container.innerHTML = `<div class="mumu-grid">${res.vms.map((vm, i) => {
         const m = vm.name.match(/MuMuPlayerGlobal-12\.0-(\d+)/);
         const idx = m ? parseInt(m[1]) : i;
         const display = vm.display_name || vm.name;
-        if (idx < 5) vmDisplayNames[idx] = display;
+        vmDisplayNames[idx] = display;
+        const h = healthMap[idx];
         return `
-        <div class="mumu-vm-item" style="display:flex;align-items:center;padding:10px 14px;border-radius:8px;background:var(--bg-input);border:1px solid var(--border-color);margin-bottom:8px">
-            <div style="flex:1">
-                <div style="font-weight:500;font-size:13px">${esc(display)}</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
-                    <span style="font-size:10px;color:var(--text-muted)">${esc(vm.name)}</span>
-                    ${vm.running ? `
-                    <span style="margin:0 4px">·</span>
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:4px"></span>Running
-                    <span style="margin:0 4px">·</span>
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${vm.roblox_running ? 'var(--green)' : 'var(--red)'};margin-right:4px"></span>
-                    Roblox ${vm.roblox_running ? 'Running' : 'Stopped'}
-                    ` : `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:4px"></span>Stopped`}
+        <div class="mumu-card">
+            <div class="mumu-card-header">
+                <div class="mumu-card-icon"><i class="fas fa-desktop"></i></div>
+                <div class="mumu-card-info">
+                    <div class="mumu-card-name">${esc(display)}</div>
+                    <div class="mumu-card-model">${esc(vm.name)}</div>
                 </div>
             </div>
-            ${vm.running ? `
-            <div style="display:flex;gap:6px;flex-shrink:0">
+            <div class="mumu-card-status">
+                <span class="mumu-status-badge ${vm.running ? 'mumu-status-active' : 'mumu-status-stopped'}">
+                    <span class="status-dot ${vm.running ? 'green' : 'red'}"></span>
+                    ${vm.running ? 'Running' : 'Stopped'}
+                </span>
+                ${vm.running ? `
+                <span class="mumu-status-badge ${vm.roblox_running ? 'mumu-status-active' : 'mumu-status-stopped'}">
+                    <span class="status-dot ${vm.roblox_running ? 'green' : 'red'}"></span>
+                    Roblox ${vm.roblox_running ? 'Running' : 'Stopped'}
+                </span>` : ''}
+                ${vm.running && h && h.connected ? `
+                <span class="mumu-status-badge mumu-status-active">
+                    <span class="status-dot green"></span>
+                    ADB OK
+                </span>` : vm.running ? `
+                <span class="mumu-status-badge mumu-status-stopped">
+                    <span class="status-dot red"></span>
+                    ADB Offline
+                </span>` : ''}
+            </div>
+            ${vm.running && h && h.connected ? `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;font-size:11px">
+                <div style="padding:6px 8px;background:var(--bg-card);border-radius:5px;border:1px solid var(--border-color)">
+                    <div style="color:var(--text-muted);margin-bottom:1px">Uptime</div>
+                    <div style="font-weight:600">${esc(h.uptime || 'N/A')}</div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg-card);border-radius:5px;border:1px solid var(--border-color)">
+                    <div style="color:var(--text-muted);margin-bottom:1px">RAM</div>
+                    <div style="font-weight:600">${h.mem_used_pct != null ? h.mem_used_pct + '%' : 'N/A'}</div>
+                    ${h.mem_used_pct != null ? `
+                    <div style="margin-top:4px;height:4px;background:var(--border-color);border-radius:2px;overflow:hidden">
+                        <div style="width:${h.mem_used_pct}%;height:100%;background:${h.mem_used_pct > 80 ? 'var(--red)' : h.mem_used_pct > 60 ? 'var(--yellow)' : 'var(--green)'};border-radius:2px"></div>
+                    </div>` : ''}
+                </div>
+            </div>` : ''}
+            <div class="mumu-card-actions">
+                ${vm.running ? `
                 <button class="btn btn-sm btn-warning" onclick="restartMuMuVM('${esc(vm.name)}')"><i class="fas fa-sync-alt"></i> Restart</button>
                 <button class="btn btn-sm btn-danger" onclick="shutdownMuMuVM('${esc(vm.name)}')"><i class="fas fa-power-off"></i> Shutdown</button>
-            </div>` : `
-            <div style="display:flex;gap:6px;flex-shrink:0">
+                ` : `
                 <button class="btn btn-sm btn-primary" onclick="startMuMuVM('${esc(vm.name)}')"><i class="fas fa-play"></i> Start</button>
-            </div>`}
+                `}
+            </div>
         </div>`;
-    }).join('');
+    }).join('')}</div>`;
     updateVmSerialLabels();
+    renderVmAccountMap();
 }
 
 function updateVmSerialLabels() {
-    document.querySelectorAll('#mumuSerialLabels label[data-vmidx]').forEach(el => {
-        const idx = el.getAttribute('data-vmidx');
-        if (idx != null) {
-            el.textContent = getVmDisplayName(parseInt(idx));
-        }
+    const container = document.getElementById('mumuSerialLabels');
+    if (!container) return;
+    const labels = container.querySelectorAll('label');
+    labels.forEach((el, i) => {
+        el.textContent = getVmDisplayName(i);
     });
 }
 
@@ -1078,3 +1687,590 @@ async function copyScript() {
         window.getSelection().removeAllRanges();
     }
 }
+
+// ==================== SCRIPT TABS ====================
+
+function switchScriptTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.script-tab').forEach(t => {
+        t.classList.remove('active', 'btn-primary');
+        t.classList.add('btn-secondary');
+    });
+    document.querySelector(`.script-tab[data-script="${tab}"]`).classList.add('active', 'btn-primary');
+    document.querySelector(`.script-tab[data-script="${tab}"]`).classList.remove('btn-secondary');
+    
+    // Update content
+    document.querySelectorAll('.script-content').forEach(c => c.style.display = 'none');
+    document.getElementById(`script-${tab}`).style.display = 'block';
+}
+
+async function generateMailboxScript() {
+    const targetId = document.getElementById('scriptTargetId').value;
+    const targetName = document.getElementById('scriptTargetName').value || 'Player';
+    const batchSize = document.getElementById('scriptBatchSize').value || 25;
+    const delay = document.getElementById('scriptDelay').value || 8;
+    
+    if (!targetId) {
+        showToast('Masukkan Target Player ID', 'warning');
+        return;
+    }
+    
+    try {
+        const res = await api('GET', `/api/generate-mailbox-script?target_id=${targetId}&target_name=${encodeURIComponent(targetName)}&batch_size=${batchSize}&delay=${delay}`);
+        if (res && res.script) {
+            document.getElementById('mailboxScriptOutput').textContent = res.script;
+            showToast('Mailbox script generated!', 'success');
+        } else {
+            showToast('Gagal generate script', 'error');
+        }
+    } catch (e) {
+        showToast(`Error: ${e.message}`, 'error');
+    }
+}
+
+async function copyMailboxScript() {
+    const el = document.getElementById('mailboxScriptOutput');
+    if (el.textContent.startsWith('Klik')) {
+        showToast('Generate script dulu', 'warning');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(el.textContent);
+        showToast('Script copied!', 'success');
+    } catch {
+        const range = document.createRange();
+        range.selectNode(el);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+    }
+}
+
+async function generateCustomBatchScript() {
+    const targetId = document.getElementById('customTargetId').value;
+    const targetName = document.getElementById('customTargetName').value || 'Player';
+    const itemsText = document.getElementById('customItems').value;
+    const note = document.getElementById('customNote').value || '';
+    const batchSize = document.getElementById('customBatchSize').value || 25;
+    
+    if (!targetId) {
+        showToast('Masukkan Target Player ID', 'warning');
+        return;
+    }
+    
+    if (!itemsText.trim()) {
+        showToast('Masukkan items', 'warning');
+        return;
+    }
+    
+    // Parse items from textarea
+    const items = itemsText.split('\n').filter(l => l.trim()).map(line => {
+        const parts = line.split('|');
+        return {
+            category: parts[0]?.trim() || '',
+            itemKey: parts[1]?.trim() || ''
+        };
+    }).filter(i => i.category && i.itemKey);
+    
+    if (items.length === 0) {
+        showToast('Format items salah. Gunakan: Category|ItemKey', 'warning');
+        return;
+    }
+    
+    try {
+        const res = await api('POST', '/api/generate-mailbox-batch-script', {
+            target_id: parseInt(targetId),
+            target_name: targetName,
+            items: items,
+            note: note,
+            batch_size: parseInt(batchSize)
+        });
+        
+        if (res && res.script) {
+            document.getElementById('customBatchScriptOutput').textContent = res.script;
+            showToast(`Script generated for ${items.length} items!`, 'success');
+        } else {
+            showToast('Gagal generate script', 'error');
+        }
+    } catch (e) {
+        showToast(`Error: ${e.message}`, 'error');
+    }
+}
+
+async function copyCustomBatchScript() {
+    const el = document.getElementById('customBatchScriptOutput');
+    if (el.textContent.startsWith('Masukkan')) {
+        showToast('Generate script dulu', 'warning');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(el.textContent);
+        showToast('Script copied!', 'success');
+    } catch {
+        const range = document.createRange();
+        range.selectNode(el);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+    }
+}
+
+function renderVmAccountMap() {
+    const container = document.getElementById('vmAccountMap');
+    const allAccounts = accounts;
+    const serials = settings.mumu_serials || [];
+    const vmCount = Math.max(serials.length, 1);
+    const vmNames = [];
+    for (let i = 0; i < vmCount; i++) vmNames.push(getVmDisplayName(i));
+    let html = '<div style="display:grid;gap:8px">';
+    for (let i = 0; i < vmCount; i++) {
+        const vmAccounts = allAccounts.filter(a => (a.mumu_instance != null ? a.mumu_instance : 0) === i);
+        html += `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:6px">
+            <div style="font-size:12px;font-weight:600;min-width:70px">${esc(vmNames[i] || `MuMu-${i}`)}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">
+                ${vmAccounts.length ? vmAccounts.map(a => {
+                    const statusColor = a.status === 'connected' || a.status === 'active' || a.status === 'monitoring' ? 'var(--green)' :
+                        a.status === 'error' || a.status === 'kicked' ? 'var(--red)' :
+                        a.status === 'idle' ? 'var(--yellow)' : 'var(--text-muted)';
+                    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color)">
+                        <span style="width:6px;height:6px;border-radius:50%;background:${statusColor};flex-shrink:0"></span>
+                        ${esc(a.name)}
+                    </span>`;
+                }).join('') : `<span style="font-size:11px;color:var(--text-muted)"><i class="fas fa-minus"></i> No accounts</span>`}
+            </div>
+        </div>`;
+    }
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function switchSettingsTab(tab) {
+    document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.settings-group').forEach(g => g.classList.remove('active'));
+    document.querySelector(`.settings-tab[data-tab="${tab}"]`).classList.add('active');
+    document.getElementById(`settings-${tab}`).classList.add('active');
+}
+
+function toggleActionsMenu(btn) {
+    const dropdown = btn.nextElementSibling;
+    const isOpen = dropdown.classList.contains('open');
+    closeAllActionMenus();
+    if (!isOpen) dropdown.classList.add('open');
+}
+
+function closeAllActionMenus() {
+    document.querySelectorAll('.actions-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.actions-more')) closeAllActionMenus();
+});
+
+// ==================== MAILBOX FUNCTIONS ====================
+
+let mailboxInventory = [];
+let mailboxSelectedItems = [];
+let mailboxHistory = [];
+let mailboxTargets = [];
+let _selectedAccount = '';
+
+async function loadMailboxAccounts() {
+    try {
+        const resp = await api('GET', '/api/mailbox/accounts');
+        if (resp.error) {
+            showToast(resp.error, 'error');
+            return;
+        }
+        
+        const accounts = resp.accounts || [];
+        const select = document.getElementById('mailboxAccountSelect');
+        select.innerHTML = '<option value="">— Pilih Akun —</option>';
+        
+        if (accounts.length === 0) {
+            select.innerHTML = '<option value="">Belum ada akun yang aktif</option>';
+            showToast('Belum ada akun yang menjalankan script monitor', 'warning');
+            return;
+        }
+        
+        accounts.forEach(acc => {
+            const opt = document.createElement('option');
+            opt.value = acc.name;
+            opt.textContent = `${acc.name} (${acc.items_count} items) - ${acc.updated_at || 'no data'}`;
+            select.appendChild(opt);
+        });
+        
+        showToast(`Found ${accounts.length} akun aktif`, 'success');
+    } catch (e) {
+        showToast(`Error: ${e.message}`, 'error');
+    }
+}
+
+async function loadMailboxInventory() {
+    const select = document.getElementById('mailboxAccountSelect');
+    const account = select.value;
+    
+    if (!account) {
+        showToast('Pilih akun dulu', 'warning');
+        return;
+    }
+    
+    _selectedAccount = account;
+    const container = document.getElementById('mailboxInventoryList');
+    container.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i> Loading inventory...</div>';
+    
+    try {
+        const resp = await api('POST', '/api/mailbox/inventory', { account });
+        if (resp.error) {
+            container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i> ${esc(resp.error)}</div>`;
+            return;
+        }
+        
+        mailboxInventory = resp.items || [];
+        
+        if (mailboxInventory.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i> Tidak ada inventory untuk akun ini</div>';
+            return;
+        }
+        
+        renderMailboxInventory();
+        showToast(`Loaded ${mailboxInventory.length} items dari ${account}`, 'success');
+    } catch (e) {
+        container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i> Error: ${esc(e.message)}</div>`;
+    }
+}
+
+function renderMailboxInventory() {
+    const container = document.getElementById('mailboxInventoryList');
+    const search = (document.getElementById('mailboxSearch').value || '').toLowerCase();
+    
+    let filtered = mailboxInventory;
+    if (search) {
+        filtered = mailboxInventory.filter(item => 
+            item.name.toLowerCase().includes(search)
+        );
+    }
+    
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i> No items found</div>';
+        return;
+    }
+    
+    let html = '';
+    filtered.forEach(item => {
+        const isSelected = mailboxSelectedItems.some(s => s.name === item.name);
+        const hasUuid = item.id && item.id !== '';
+        html += `
+        <div class="mailbox-item ${isSelected ? 'selected' : ''}" 
+             onclick="toggleMailboxItem('${esc(item.name)}', '${esc(item.category || 'Other')}', '${esc(item.id || '')}')"
+             style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;border-radius:6px;cursor:pointer;transition:all 0.15s;background:${isSelected ? 'rgba(34,197,94,0.15)' : 'var(--bg-input)'};border:1px solid ${isSelected ? 'var(--green)' : 'var(--border-color)'}">
+            <input type="checkbox" ${isSelected ? 'checked' : ''} style="pointer-events:none">
+            <span style="font-size:12px;flex:1">${esc(item.name)}</span>
+            ${item.qty > 1 ? `<span style="font-size:10px;color:var(--text-muted)">x${item.qty}</span>` : ''}
+            <span style="font-size:9px;color:${hasUuid ? 'var(--green)' : 'var(--text-muted)'}">${hasUuid ? '✓ UUID' : 'no UUID'}</span>
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+    document.getElementById('mailboxTotalCount').textContent = `Total: ${filtered.length} items`;
+}
+
+function toggleMailboxItem(name, category, id) {
+    const idx = mailboxSelectedItems.findIndex(s => s.name === name);
+    if (idx >= 0) {
+        mailboxSelectedItems.splice(idx, 1);
+    } else {
+        mailboxSelectedItems.push({ name, category, id: id || '' });
+    }
+    renderMailboxInventory();
+    updateMailboxPreview();
+}
+
+function selectAllMailboxItems() {
+    mailboxSelectedItems = mailboxInventory.map(item => ({
+        name: item.name,
+        category: item.category || 'Other',
+        id: item.id || ''
+    }));
+    renderMailboxInventory();
+    updateMailboxPreview();
+}
+
+function clearMailboxSelection() {
+    mailboxSelectedItems = [];
+    renderMailboxInventory();
+    updateMailboxPreview();
+}
+
+function filterMailboxItems() {
+    renderMailboxInventory();
+}
+
+function updateMailboxPreview() {
+    const preview = document.getElementById('mailboxPreview');
+    const count = document.getElementById('mailboxSelectedCount');
+    
+    count.textContent = mailboxSelectedItems.length;
+    
+    if (mailboxSelectedItems.length === 0) {
+        preview.innerHTML = '<span style="color:var(--text-muted)">Pilih items dulu</span>';
+        return;
+    }
+    
+    const groups = {};
+    mailboxSelectedItems.forEach(item => {
+        if (!groups[item.category]) groups[item.category] = 0;
+        groups[item.category]++;
+    });
+    
+    let html = `<div style="margin-bottom:6px;font-weight:600">Dari: ${esc(_selectedAccount)}</div>`;
+    html += '<div style="margin-bottom:6px;font-weight:600">Items:</div>';
+    for (const [cat, cnt] of Object.entries(groups)) {
+        html += `<div>${cat}: ${cnt} items</div>`;
+    }
+    
+    const batchSize = parseInt(document.getElementById('mailboxBatchSize').value) || 25;
+    const batches = Math.ceil(mailboxSelectedItems.length / batchSize);
+    html += `<div style="margin-top:6px;color:var(--blue)">${mailboxSelectedItems.length} items → ${batches} batch(es)</div>`;
+    
+    if (mailboxTargets.length > 0) {
+        html += `<div style="margin-top:4px;color:var(--yellow)">Kirim ke: ${mailboxTargets.join(', ')}</div>`;
+    }
+    
+    preview.innerHTML = html;
+}
+
+// ==================== TARGET FUNCTIONS ====================
+
+function addMailboxTarget() {
+    const input = document.getElementById('mailboxTargetUsername');
+    const username = input.value.trim();
+    
+    if (!username) {
+        showToast('Masukkan username', 'warning');
+        return;
+    }
+    
+    if (mailboxTargets.includes(username)) {
+        showToast('Sudah ditambahkan', 'warning');
+        return;
+    }
+    
+    mailboxTargets.push(username);
+    renderMailboxTargets();
+    updateMailboxPreview();
+    input.value = '';
+    showToast(`Added ${username}`, 'success');
+}
+
+function removeMailboxTarget(username) {
+    mailboxTargets = mailboxTargets.filter(t => t !== username);
+    renderMailboxTargets();
+    updateMailboxPreview();
+}
+
+function renderMailboxTargets() {
+    const container = document.getElementById('mailboxTargetList');
+    
+    if (mailboxTargets.length === 0) {
+        container.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px;text-align:center">Belum ada target</div>';
+        return;
+    }
+    
+    let html = '';
+    mailboxTargets.forEach(username => {
+        html += `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:6px">
+            <i class="fas fa-user" style="color:var(--blue);font-size:11px"></i>
+            <span style="font-size:12px;flex:1">${esc(username)}</span>
+            <button class="btn btn-sm btn-danger" onclick="removeMailboxTarget('${esc(username)}')" style="padding:2px 6px;font-size:10px">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+// ==================== GENERATE SCRIPT ====================
+
+async function sendMailboxItems() {
+    if (!_selectedAccount) { showToast('Pilih akun dulu', 'warning'); return; }
+    if (mailboxTargets.length === 0) { showToast('Tambah target dulu', 'warning'); return; }
+    if (mailboxSelectedItems.length === 0) { showToast('Pilih items dulu', 'warning'); return; }
+    
+    const btn = document.getElementById('btnSendMailbox');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim...';
+    
+    // Show status card
+    const statusCard = document.getElementById('mailboxStatusCard');
+    statusCard.style.display = 'block';
+    document.getElementById('mailboxStatusContent').innerHTML = `
+        <div style="text-align:center;padding:20px">
+            <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--blue)"></i>
+            <p style="margin-top:10px;color:var(--text-muted)">Mengirim command ke executor...</p>
+        </div>
+    `;
+    
+    let allSuccess = true;
+    let totalSent = 0;
+    
+    // Send to each target
+    for (const target of mailboxTargets) {
+        try {
+            const resp = await api('POST', '/api/mailbox/send', {
+                account: _selectedAccount,
+                targetUsername: target,
+                items: mailboxSelectedItems,
+                batchSize: parseInt(document.getElementById('mailboxBatchSize').value) || 25
+            });
+            
+            if (resp.success) {
+                totalSent++;
+                
+                // Update status
+                document.getElementById('mailboxStatusContent').innerHTML = `
+                    <div style="padding:10px">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                            <i class="fas fa-check-circle" style="color:var(--green)"></i>
+                            <span>Command queued untuk <strong>${esc(target)}</strong> (ID: ${resp.target_id})</span>
+                        </div>
+                        <div style="font-size:12px;color:var(--text-muted)">
+                            ${resp.items_count} items | Command ID: ${resp.command_id}
+                        </div>
+                        <div style="margin-top:10px;padding:8px;background:var(--bg-input);border-radius:6px;font-size:11px">
+                            <i class="fas fa-info-circle" style="color:var(--blue)"></i>
+                            Monitor script di executor akan otomatis eksekusi command ini.
+                        </div>
+                    </div>
+                `;
+                
+                // Poll for result
+                pollCommandResult(resp.command_id, target);
+                
+                addMailboxHistory('send', mailboxSelectedItems.length, target, 
+                    `Command queued (${resp.items_count} items)`);
+            } else {
+                allSuccess = false;
+                showToast(`${target}: ${resp.error || 'Gagal'}`, 'error');
+            }
+        } catch (e) {
+            allSuccess = false;
+            showToast(`${target}: Error - ${e.message}`, 'error');
+        }
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim Sekarang';
+    
+    if (allSuccess && totalSent > 0) {
+        showToast(`Command terkirim ke ${totalSent} target!`, 'success');
+    }
+}
+
+async function pollCommandResult(cmdId, target) {
+    let attempts = 0;
+    const maxAttempts = 60; // 5 minutes max
+    
+    const checkResult = async () => {
+        attempts++;
+        if (attempts > maxAttempts) return;
+        
+        try {
+            const resp = await api('GET', `/api/mailbox/result/${cmdId}`);
+            
+            if (resp.status === 'completed') {
+                document.getElementById('mailboxStatusContent').innerHTML = `
+                    <div style="padding:10px">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                            <i class="fas fa-check-circle" style="color:var(--green);font-size:20px"></i>
+                            <span style="font-size:16px;font-weight:600">Berhasil!</span>
+                        </div>
+                        <div style="font-size:12px;color:var(--text-muted)">
+                            ${esc(resp.message || `Items terkirim ke ${target}`)}
+                        </div>
+                    </div>
+                `;
+                addMailboxHistory('success', mailboxSelectedItems.length, target, resp.message || 'Success');
+                showToast(`${target}: Berhasil!`, 'success');
+                return;
+            } else if (resp.status === 'failed') {
+                document.getElementById('mailboxStatusContent').innerHTML = `
+                    <div style="padding:10px">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                            <i class="fas fa-exclamation-circle" style="color:var(--red);font-size:20px"></i>
+                            <span style="font-size:16px;font-weight:600">Gagal</span>
+                        </div>
+                        <div style="font-size:12px;color:var(--text-muted)">
+                            ${esc(resp.message || 'Terjadi error')}
+                        </div>
+                    </div>
+                `;
+                addMailboxHistory('failed', mailboxSelectedItems.length, target, resp.message || 'Failed');
+                showToast(`${target}: Gagal - ${resp.message}`, 'error');
+                return;
+            }
+            
+            // Still pending, check again
+            setTimeout(checkResult, 5000);
+        } catch (e) {
+            setTimeout(checkResult, 5000);
+        }
+    };
+    
+    setTimeout(checkResult, 2000);
+}
+
+// ==================== HISTORY ====================
+
+function addMailboxHistory(type, count, target, message) {
+    const now = new Date().toLocaleTimeString();
+    mailboxHistory.unshift({ time: now, type, count, target, message });
+    if (mailboxHistory.length > 20) mailboxHistory.pop();
+    renderMailboxHistory();
+}
+
+function renderMailboxHistory() {
+    const container = document.getElementById('mailboxHistory');
+    
+    if (mailboxHistory.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-history"></i> Belum ada history</div>';
+        return;
+    }
+    
+    let html = '';
+    mailboxHistory.forEach(h => {
+        const color = h.message.includes('generated') || h.message.includes('success') ? 'var(--green)' : 'var(--text-muted)';
+        html += `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:4px;background:var(--bg-input);border-radius:6px;font-size:11px">
+            <i class="fas fa-code" style="color:${color};width:16px;text-align:center"></i>
+            <span style="color:var(--text-muted);min-width:60px">${h.time}</span>
+            <span style="flex:1">${h.count} items → ${esc(h.target)}</span>
+            <span style="color:${color}">${esc(h.message)}</span>
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+function clearMailboxHistory() {
+    mailboxHistory = [];
+    renderMailboxHistory();
+}
+
+// ==================== INIT ====================
+
+function initMailbox() {
+    mailboxTargets = [];
+    mailboxSelectedItems = [];
+    renderMailboxTargets();
+    loadMailboxAccounts();
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(initMailbox, 1000);
+});
