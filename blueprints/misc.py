@@ -1345,6 +1345,31 @@ def remote_register():
     log_activity(f'Remote monitor registered: {serial} ({len(packages)} packages)')
     return jsonify({'success': True, 'account_map': account_map, 'accounts': len(accounts)})
 
+@misc_bp.route('/api/remote/monitors', methods=['GET'])
+def remote_monitors_list():
+    result = []
+    for serial, info in remote_monitors.items():
+        packages = info.get('packages', [])
+        pkg_status = []
+        for pkg in packages:
+            matched_account = None
+            for acc in accounts:
+                if acc.get('package_name') == pkg:
+                    matched_account = acc.get('name', '')
+                    break
+            pkg_status.append({
+                'package': pkg,
+                'account': matched_account or 'Unassigned',
+                'has_account': bool(matched_account)
+            })
+        result.append({
+            'serial': serial,
+            'packages': pkg_status,
+            'registered_at': info.get('registered_at', 0),
+            'package_count': len(packages)
+        })
+    return jsonify({'monitors': result, 'count': len(result)})
+
 @misc_bp.route('/api/remote/status', methods=['POST'])
 def remote_status():
     data = request.json or {}
