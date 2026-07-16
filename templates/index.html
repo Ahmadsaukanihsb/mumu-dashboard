@@ -1034,12 +1034,12 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>MuMu Instance</label>
-                    <select class="input" id="accInstance"></select>
-                </div>
-                <div class="form-group">
-                    <label>Package Name <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(Roblox app package)</span></label>
+                    <label>Package Name <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(Roblox app package - auto-filled from remote monitor)</span></label>
                     <input type="text" class="input" id="accPackage" placeholder="com.roblox.client" style="font-family:monospace;font-size:12px">
+                </div>
+                <div class="form-group" style="display:none" id="accInstanceGroup">
+                    <label>MuMu Instance <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(only for MuMu VM on Windows)</span></label>
+                    <select class="input" id="accInstance"></select>
                 </div>
             </div>
             <div class="modal-footer">

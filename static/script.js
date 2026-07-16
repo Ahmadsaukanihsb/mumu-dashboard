@@ -891,6 +891,39 @@ function updateAccountSelect() {
     if (curInst) instSel.value = curInst;
 }
 
+async function loadRemotePackages() {
+    try {
+        const res = await api('GET', '/api/remote/monitors');
+        if (!res || !res.monitors || !res.monitors.length) return;
+        const usedPkgs = new Set(accounts.map(a => a.package_name).filter(Boolean));
+        const available = [];
+        res.monitors.forEach(m => {
+            (m.packages || []).forEach(p => {
+                if (!usedPkgs.has(p.package)) {
+                    available.push(p.package);
+                }
+            });
+        });
+        if (!available.length) return;
+        const pkgInput = document.getElementById('accPackage');
+        const existing = pkgInput.parentElement.querySelector('.remote-pkg-list');
+        if (existing) existing.remove();
+        const list = document.createElement('div');
+        list.className = 'remote-pkg-list';
+        list.style.cssText = 'margin-top:6px;display:flex;flex-wrap:wrap;gap:4px';
+        available.forEach(pkg => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-secondary';
+            btn.style.cssText = 'font-size:10px;font-family:monospace;padding:2px 8px';
+            btn.textContent = pkg;
+            btn.onclick = () => { pkgInput.value = pkg; };
+            list.appendChild(btn);
+        });
+        pkgInput.parentElement.appendChild(list);
+    } catch(e) {}
+}
+
 function getStatusBadge(status) {
     const badges = {
         idle: '<span class="badge badge-idle">Idle</span>',
@@ -1050,8 +1083,10 @@ function showAddAccount() {
     document.getElementById('accCookie').value = '';
     document.getElementById('accInstance').value = '0';
     document.getElementById('accPackage').value = '';
+    document.getElementById('accInstanceGroup').style.display = 'none';
     openModal('accountModal');
     updateAccountSelect();
+    loadRemotePackages();
 }
 
 function updateServerCheck(el) {
@@ -1097,8 +1132,11 @@ async function editAccount(id) {
     document.getElementById('editAccountId').value = id;
     document.getElementById('accName').value = acc.name;
     document.getElementById('accCookie').value = acc.cookie || '';
-    document.getElementById('accInstance').value = (acc.mumu_instance != null) ? acc.mumu_instance : 0;
     document.getElementById('accPackage').value = acc.package_name || '';
+    document.getElementById('accInstanceGroup').style.display = acc.package_name ? 'none' : 'block';
+    if (!acc.package_name) {
+        document.getElementById('accInstance').value = (acc.mumu_instance != null) ? acc.mumu_instance : 0;
+    }
     openModal('accountModal');
     updateAccountSelect();
 }

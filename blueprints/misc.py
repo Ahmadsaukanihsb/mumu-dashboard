@@ -1331,19 +1331,55 @@ def remote_register():
     packages = data.get('packages', [])
     if not serial or not packages:
         return jsonify({'error': 'serial and packages required'}), 400
+
+    existing_pkgs = {acc.get('package_name') for acc in accounts}
+    auto_created = []
+
+    for pkg_info in packages:
+        pkg = pkg_info.get('name', '')
+        if pkg and pkg not in existing_pkgs:
+            acc = {
+                'id': str(int(time.time() * 1000000) + hash(pkg) % 100000),
+                'name': pkg.split('.')[-1],
+                'cookie': '',
+                'active': False,
+                'status': 'idle',
+                'last_joined': None,
+                'server_id': '',
+                'server_ids': [],
+                'mumu_instance': 0,
+                'package_name': pkg,
+                'auto_join': False,
+                'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'remote': True
+            }
+            with _data_lock:
+                accounts.append(acc)
+            auto_created.append(pkg)
+            log_activity(f'Auto-created account for {pkg}')
+
+    if auto_created:
+        save_data()
+
     account_map = {}
     for acc in accounts:
         pkg = acc.get('package_name', '')
         if pkg:
             account_map[pkg] = acc.get('name', pkg)
+
     remote_monitors[serial] = {
         'serial': serial,
         'packages': [p.get('name', '') for p in packages],
         'registered_at': time.time(),
         'last_report': 0
     }
-    log_activity(f'Remote monitor registered: {serial} ({len(packages)} packages)')
-    return jsonify({'success': True, 'account_map': account_map, 'accounts': len(accounts)})
+    log_activity(f'Remote monitor registered: {serial} ({len(packages)} packages, {len(auto_created)} new)')
+    return jsonify({
+        'success': True,
+        'account_map': account_map,
+        'accounts': len(accounts),
+        'auto_created': auto_created
+    })
 
 @misc_bp.route('/api/remote/monitors', methods=['GET'])
 def remote_monitors_list():
