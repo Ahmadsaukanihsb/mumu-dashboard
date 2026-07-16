@@ -1083,8 +1083,6 @@ function showAddAccount() {
     document.getElementById('accCookie').value = '';
     document.getElementById('accInstance').value = '0';
     document.getElementById('accPackage').value = '';
-    var el = document.getElementById('accInstanceGroup');
-    if (el) el.style.display = 'none';
     openModal('accountModal');
     updateAccountSelect();
     loadRemotePackages();
@@ -1134,11 +1132,7 @@ async function editAccount(id) {
     document.getElementById('accName').value = acc.name;
     document.getElementById('accCookie').value = acc.cookie || '';
     document.getElementById('accPackage').value = acc.package_name || '';
-    var el = document.getElementById('accInstanceGroup');
-    if (el) el.style.display = acc.package_name ? 'none' : 'block';
-    if (!acc.package_name) {
-        document.getElementById('accInstance').value = (acc.mumu_instance != null) ? acc.mumu_instance : 0;
-    }
+    document.getElementById('accInstance').value = (acc.mumu_instance != null) ? acc.mumu_instance : 0;
     openModal('accountModal');
     updateAccountSelect();
 }
