@@ -73,6 +73,10 @@ def ensure_vm_running(serial, instance):
     code, out = mumu_vm_cmd(['list', 'runningvms'])
     if code == 0 and vm_name in out:
         return False
+    code_list, out_list = mumu_vm_cmd(['list', 'vms'])
+    if code_list == 0 and vm_name not in out_list:
+        log_activity(f'[AutoRestart] VM {vm_name} not registered, skipping', 'warning')
+        return False
     log_activity(f'[AutoRestart] VM {vm_name} down, starting...')
     c, o = mumu_vm_cmd(['startvm', vm_name, '--type', 'headless'])
     if c != 0:
