@@ -49,6 +49,8 @@ def update_settings():
                 settings[k] = val
     
     save_data()
-    # Don't auto-login on password change - user must login with new password
     log_activity('Pengaturan diperbarui')
-    return jsonify(s)
+    result = {k: settings[k] for k in keys if k in settings}
+    result.pop('dashboard_password', None)
+    result.pop('discord_client_secret', None)
+    return jsonify(result)
