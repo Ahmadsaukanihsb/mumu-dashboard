@@ -33,7 +33,7 @@ echo "[1/7] Updating packages..."
 pkg update -y 2>/dev/null || apt update -y
 
 echo "[2/7] Installing system packages..."
-pkg install -y python adb git curl cloudflared 2>/dev/null || apt install -y python adb git curl cloudflared
+pkg install -y python android-tools git curl cloudflared 2>/dev/null || apt install -y python android-tools git curl cloudflared
 
 echo "[3/7] Installing Python packages..."
 pip install --upgrade pip 2>/dev/null || true
