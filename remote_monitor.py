@@ -447,11 +447,31 @@ class RootMonitor:
         print(f'[{account_name}] Gifting {item_id} to {cmd.get("target", "?")} (ID: {target_id})')
 
 
+CONFIG_PATH = '/sdcard/Download/dashboard_config.json'
+
+def load_config():
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return {}
+
 def main():
+    saved_config = load_config()
+    default_url = saved_config.get('domain', '')
+
     parser = argparse.ArgumentParser(description='Dashboard Roblox - Remote Monitor (Root)')
-    parser.add_argument('--url', required=True, help='PC Dashboard URL (e.g. https://dashboard.aavpanel.my.id)')
+    parser.add_argument('--url', default=default_url, help='PC Dashboard URL')
     parser.add_argument('--interval', type=int, default=5, help='Poll interval in seconds (default: 5)')
     args = parser.parse_args()
+
+    if not args.url:
+        print('[ERROR] Dashboard URL required!')
+        print(f'[INFO] Set domain in {CONFIG_PATH}')
+        print('[INFO] Or run: python remote_monitor.py --url https://your-domain.com')
+        return
 
     monitor = RootMonitor(
         dashboard_url=args.url,
