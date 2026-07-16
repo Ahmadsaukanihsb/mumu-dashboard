@@ -1406,6 +1406,26 @@ def remote_monitors_list():
         })
     return jsonify({'monitors': result, 'count': len(result)})
 
+@misc_bp.route('/api/remote/cookie', methods=['POST'])
+def remote_cookie():
+    data = request.json or {}
+    package = data.get('package', '')
+    cookie = data.get('cookie', '')
+    if not package or not cookie:
+        return jsonify({'error': 'package and cookie required'}), 400
+    for acc in accounts:
+        if acc.get('package_name') == package:
+            if not acc.get('cookie') or acc['cookie'] == '':
+                from models import encrypt_cookie
+                acc['cookie'] = encrypt_cookie(cookie)
+                acc['status'] = 'cookie_ready'
+                save_data()
+                log_activity(f'Cookie auto-extracted for {package} -> {acc.get("name", "?")}')
+                return jsonify({'success': True, 'account': acc.get('name', ''), 'package': package})
+            else:
+                return jsonify({'success': True, 'account': acc.get('name', ''), 'package': package, 'note': 'Cookie already set'})
+    return jsonify({'error': f'No account for package {package}'}), 404
+
 @misc_bp.route('/api/remote/status', methods=['POST'])
 def remote_status():
     data = request.json or {}
