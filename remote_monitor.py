@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Dashboard Roblox - Remote Monitor Script
-Jalankan di Termux (Redfinger) untuk auto-rejoin via ADB.
+Dashboard Roblox - Remote Monitor (Root Mode)
+Jalankan di Termux (Redfinger) untuk auto-rejoin via su commands.
 Connect ke PC dashboard via HTTP.
 
 Cara pakai:
-    python remote_monitor.py --url https://dashboard.aavpanel.my.id --serial 127.0.0.1:5000
+    python remote_monitor.py --url https://dashboard.aavpanel.my.id
 """
 
 import argparse
@@ -20,77 +20,62 @@ import urllib.error
 import re
 
 
-class ADBMonitor:
-    def __init__(self, serial, dashboard_url, poll_interval=5):
-        self.serial = serial
+class RootMonitor:
+    def __init__(self, dashboard_url, poll_interval=5):
         self.dashboard_url = dashboard_url.rstrip('/')
         self.poll_interval = poll_interval
-        self.adb = self._find_adb()
         self.packages = []
         self.account_map = {}
         self.running = False
         self.settings = {}
+        self.has_root = self._check_root()
 
-    def _find_adb(self):
-        candidates = [
-            '/data/data/com.termux/files/usr/bin/adb',
-            os.path.expanduser('~/.termux/bin/adb'),
-            'adb',
-        ]
-        for c in candidates:
-            try:
-                r = subprocess.run([c, '--version'], capture_output=True, timeout=5)
-                if r.returncode == 0:
-                    print(f'[ADB] Found: {c}')
-                    return c
-            except:
-                pass
-        print('[ADB] ERROR: adb not found!')
-        return None
-
-    def adb_cmd(self, args, timeout=15):
-        if not self.adb:
-            return None, ''
-        cmd = [self.adb, '-s', self.serial] + args
+    def _check_root(self):
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            r = subprocess.run(['su', '-c', 'echo ok'],
+                capture_output=True, text=True, timeout=5)
+            ok = r.returncode == 0 and 'ok' in r.stdout
+            if ok:
+                print('[ROOT] Root access: OK')
+            else:
+                print('[ROOT] Root access: FAILED')
+            return ok
+        except Exception as e:
+            print(f'[ROOT] Root check error: {e}')
+            return False
+
+    def su_cmd(self, command, timeout=15):
+        try:
+            r = subprocess.run(['su', '-c', command],
+                capture_output=True, text=True, timeout=timeout)
             return r.returncode, r.stdout.strip() or r.stderr.strip()
         except subprocess.TimeoutExpired:
             return None, 'timeout'
         except Exception as e:
             return None, str(e)
 
-    def adb_connect(self):
-        if not self.adb:
-            return False
-        try:
-            r = subprocess.run([self.adb, 'connect', self.serial],
-                capture_output=True, text=True, timeout=10)
-            ok = 'connected' in r.stdout.lower() or 'already connected' in r.stdout.lower()
-            if not ok:
-                print(f'[ADB] Connect failed: {r.stdout.strip()} {r.stderr.strip()}')
-            return ok
-        except Exception as e:
-            print(f'[ADB] Connect error: {e}')
-            return False
-
     def check_roblox(self, package='com.roblox.client'):
-        code, out = self.adb_cmd(['shell', 'pidof', package])
+        code, out = self.su_cmd(f'pidof {package}')
         if code == 0 and out:
             pids = out.split()
             return bool(pids and pids[0].isdigit())
         return False
 
+    def get_pid(self, package='com.roblox.client'):
+        code, out = self.su_cmd(f'pidof {package}')
+        if code == 0 and out:
+            pid = out.split()[0]
+            if pid.isdigit():
+                return pid
+        return None
+
     def get_thread_count(self, package='com.roblox.client'):
-        code, out = self.adb_cmd(['shell', 'pidof', package])
-        if code != 0 or not out:
+        pid = self.get_pid(package)
+        if not pid:
             return None
-        pid = out.split()[0]
-        if not pid.isdigit():
-            return None
-        code2, out2 = self.adb_cmd(['shell', 'cat', f'/proc/{pid}/status'])
-        if code2 == 0:
-            for line in out2.split('\n'):
+        code, out = self.su_cmd(f'cat /proc/{pid}/status')
+        if code == 0:
+            for line in out.split('\n'):
                 if 'Threads' in line:
                     parts = line.split()
                     if len(parts) >= 2:
@@ -101,24 +86,26 @@ class ADBMonitor:
         return None
 
     def force_stop(self, package='com.roblox.client'):
-        self.adb_cmd(['shell', 'am', 'force-stop', package])
+        self.su_cmd(f'am force-stop {package}')
+
+    def start_app(self, package='com.roblox.client'):
+        self.su_cmd(f'am start -n {package}/.RobloxApp')
 
     def start_join_intent(self, package, link):
         self.force_stop(package)
         time.sleep(3)
-        code, out = self.adb_cmd([
-            'shell', 'am', 'start', '-a', 'android.intent.action.VIEW',
-            '-d', f"'{link}'", '-p', package
-        ])
+        code, out = self.su_cmd(
+            f"am start -a android.intent.action.VIEW -d '{link}' -p {package}"
+        )
         return code == 0
 
     def detect_kicked(self, package='com.roblox.client'):
-        code, out = self.adb_cmd(['shell', 'pidof', package])
-        if code != 0 or not out:
+        pid = self.get_pid(package)
+        if not pid:
             return None
-        code2, out2 = self.adb_cmd(['shell', 'dumpsys', 'window', 'windows'])
-        if code2 == 0:
-            for line in out2.split('\n'):
+        code, out = self.su_cmd('dumpsys window windows')
+        if code == 0:
+            for line in out.split('\n'):
                 if 'mIsFloatingLayer=true' in line and package in line:
                     return 'floating_dialog'
                 if package in line.lower() and any(k in line.lower() for k in
@@ -128,14 +115,14 @@ class ADBMonitor:
 
     def dismiss_dialogs(self):
         for _ in range(3):
-            self.adb_cmd(['shell', 'input', 'keyevent', 'KEYCODE_BACK'])
+            self.su_cmd('input keyevent KEYCODE_BACK')
             time.sleep(0.2)
         for xy in [('540', '960'), ('540', '800')]:
-            self.adb_cmd(['shell', 'input', 'tap', xy[0], xy[1]])
+            self.su_cmd(f'input tap {xy[0]} {xy[1]}')
             time.sleep(0.2)
 
     def discover_packages(self):
-        code, out = self.adb_cmd(['shell', 'pm', 'list', 'packages'])
+        code, out = self.su_cmd('pm list packages')
         if code == 0 and out:
             found = []
             for line in out.split('\n'):
@@ -144,6 +131,14 @@ class ADBMonitor:
                     found.append(pkg)
             return sorted(found)
         return []
+
+    def get_screen_size(self):
+        code, out = self.su_cmd('wm size')
+        if code == 0:
+            m = re.search(r'(\d+)x(\d+)', out)
+            if m:
+                return int(m.group(1)), int(m.group(2))
+        return 1080, 1920
 
     def http_get(self, path):
         url = f'{self.dashboard_url}{path}'
@@ -170,7 +165,7 @@ class ADBMonitor:
 
     def register(self):
         data = {
-            'serial': self.serial,
+            'serial': 'root',
             'packages': [{'idx': i, 'name': pkg} for i, pkg in enumerate(self.packages)]
         }
         result = self.http_post('/api/remote/register', data)
@@ -208,21 +203,17 @@ class ADBMonitor:
         })
 
     def run(self):
-        print(f'[MONITOR] Starting remote monitor...')
+        print(f'[MONITOR] Starting remote monitor (root mode)...')
         print(f'[MONITOR] Dashboard: {self.dashboard_url}')
-        print(f'[MONITOR] ADB Serial: {self.serial}')
 
-        if not self.adb:
-            print('[MONITOR] ERROR: ADB not found')
-            return
-
-        if not self.adb_connect():
-            print('[MONITOR] ERROR: ADB connect failed')
+        if not self.has_root:
+            print('[MONITOR] ERROR: Root access required!')
             return
 
         self.packages = self.discover_packages()
         if not self.packages:
             print('[MONITOR] ERROR: No Roblox packages found')
+            print('[MONITOR] Make sure Roblox apps are installed')
             return
         print(f'[MONITOR] Found packages: {self.packages}')
 
@@ -248,7 +239,7 @@ class ADBMonitor:
                     running = self.check_roblox(pkg)
                     if not running:
                         self.report_status(account_name, pkg, 'disconnected')
-                        print(f'[{account_name}] Roblox not running ({pkg}), rejoining...')
+                        print(f'[{account_name}] Not running ({pkg}), rejoining...')
                         link = self._get_join_link()
                         if link:
                             self.start_join_intent(pkg, link)
@@ -259,7 +250,7 @@ class ADBMonitor:
                     kicked = self.detect_kicked(pkg)
 
                     if kicked:
-                        print(f'[{account_name}] Kicked detected ({kicked}), rejoining...')
+                        print(f'[{account_name}] Kicked ({kicked}), rejoining...')
                         self.report_status(account_name, pkg, 'kicked', tc=tc, kicked=kicked)
                         link = self._get_join_link()
                         if link:
@@ -272,7 +263,7 @@ class ADBMonitor:
                     elif tc is not None:
                         self.report_status(account_name, pkg, 'monitoring', tc=tc)
                         if tc < 10:
-                            print(f'[{account_name}] Low thread count ({tc}), may need rejoin')
+                            print(f'[{account_name}] Low threads ({tc}), dismissing dialogs')
                             self.dismiss_dialogs()
                     else:
                         self.report_status(account_name, pkg, 'monitoring', tc=None)
@@ -308,7 +299,7 @@ class ADBMonitor:
         for cmd in result['commands']:
             cmd_id = cmd.get('id', '')
             cmd_type = cmd.get('type', '')
-            print(f'[{account_name}] Executing command: {cmd_type} ({cmd_id})')
+            print(f'[{account_name}] Executing: {cmd_type} ({cmd_id})')
             try:
                 if cmd_type == 'send_mail':
                     self._execute_mailbox_send(account_name, cmd)
@@ -334,14 +325,12 @@ class ADBMonitor:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Dashboard Roblox - Remote Monitor')
+    parser = argparse.ArgumentParser(description='Dashboard Roblox - Remote Monitor (Root)')
     parser.add_argument('--url', required=True, help='PC Dashboard URL (e.g. https://dashboard.aavpanel.my.id)')
-    parser.add_argument('--serial', default='127.0.0.1:5000', help='ADB serial (default: 127.0.0.1:5000)')
     parser.add_argument('--interval', type=int, default=5, help='Poll interval in seconds (default: 5)')
     args = parser.parse_args()
 
-    monitor = ADBMonitor(
-        serial=args.serial,
+    monitor = RootMonitor(
         dashboard_url=args.url,
         poll_interval=args.interval
     )
