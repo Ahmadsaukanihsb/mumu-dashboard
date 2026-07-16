@@ -1337,10 +1337,11 @@ def remote_register():
 
     for pkg_info in packages:
         pkg = pkg_info.get('name', '')
+        label = pkg_info.get('label', pkg.split('.')[-1])
         if pkg and pkg not in existing_pkgs:
             acc = {
                 'id': str(int(time.time() * 1000000) + hash(pkg) % 100000),
-                'name': pkg.split('.')[-1],
+                'name': label,
                 'cookie': '',
                 'active': False,
                 'status': 'idle',
@@ -1349,6 +1350,7 @@ def remote_register():
                 'server_ids': [],
                 'mumu_instance': 0,
                 'package_name': pkg,
+                'app_label': label,
                 'auto_join': False,
                 'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'remote': True
@@ -1356,7 +1358,7 @@ def remote_register():
             with _data_lock:
                 accounts.append(acc)
             auto_created.append(pkg)
-            log_activity(f'Auto-created account for {pkg}')
+            log_activity(f'Auto-created account: {label} ({pkg})')
 
     if auto_created:
         save_data()
@@ -1369,7 +1371,7 @@ def remote_register():
 
     remote_monitors[serial] = {
         'serial': serial,
-        'packages': [p.get('name', '') for p in packages],
+        'packages': [{'name': p.get('name', ''), 'label': p.get('label', '')} for p in packages],
         'registered_at': time.time(),
         'last_report': 0
     }
@@ -1387,7 +1389,13 @@ def remote_monitors_list():
     for serial, info in remote_monitors.items():
         packages = info.get('packages', [])
         pkg_status = []
-        for pkg in packages:
+        for pkg_info in packages:
+            if isinstance(pkg_info, str):
+                pkg = pkg_info
+                label = pkg.split('.')[-1]
+            else:
+                pkg = pkg_info.get('name', '')
+                label = pkg_info.get('label', pkg.split('.')[-1])
             matched_account = None
             for acc in accounts:
                 if acc.get('package_name') == pkg:
@@ -1395,6 +1403,7 @@ def remote_monitors_list():
                     break
             pkg_status.append({
                 'package': pkg,
+                'label': label,
                 'account': matched_account or 'Unassigned',
                 'has_account': bool(matched_account)
             })

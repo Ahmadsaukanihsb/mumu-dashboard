@@ -132,6 +132,17 @@ class RootMonitor:
             return sorted(found)
         return []
 
+    def get_app_label(self, package):
+        code, out = self.su_cmd(f'pm path {package}')
+        if code == 0 and out:
+            apk = out.replace('package:', '').strip()
+            code2, out2 = self.su_cmd(f'aapt dump badging {apk} 2>/dev/null | grep "application-label:"')
+            if code2 == 0 and out2:
+                label = out2.replace('application-label:', '').strip().strip("'")
+                if label:
+                    return label
+        return package.split('.')[-1]
+
     def get_screen_size(self):
         code, out = self.su_cmd('wm size')
         if code == 0:
@@ -215,9 +226,14 @@ class RootMonitor:
             return None
 
     def register(self):
+        packages_data = []
+        for i, pkg in enumerate(self.packages):
+            label = self.get_app_label(pkg)
+            print(f'[MONITOR] Package: {pkg} → {label}')
+            packages_data.append({'idx': i, 'name': pkg, 'label': label})
         data = {
             'serial': 'root',
-            'packages': [{'idx': i, 'name': pkg} for i, pkg in enumerate(self.packages)]
+            'packages': packages_data
         }
         result = self.http_post('/api/remote/register', data)
         if result and result.get('success'):
