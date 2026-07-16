@@ -134,9 +134,9 @@ def send_join_intent(acc, serial):
                 adb_dismiss_dialogs(serial)
                 time.sleep(2)
                 if attempt < 2:
-                    adb_force_stop_roblox(serial, package)
+                    adb_force_stop_roblox(serial)
                     time.sleep(3)
-                    code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'", '-p', package], serial)
+                    code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'"], serial)
                     if code != 0:
                         return False
                 continue
@@ -150,9 +150,9 @@ def send_join_intent(acc, serial):
             save_data()
             return True
         if attempt < 2:
-            adb_force_stop_roblox(serial, package)
+            adb_force_stop_roblox(serial)
             time.sleep(3)
-            code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'", '-p', package], serial)
+            code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'"], serial)
             if code != 0:
                 return False
     log_account(acc.get('id', ''), acc.get('name', '?'), 'join failed after 3 retries')
