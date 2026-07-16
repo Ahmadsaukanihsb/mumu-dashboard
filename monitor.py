@@ -30,6 +30,9 @@ def monitor_loop():
                     continue
                 acc_id = acc.get('id', '')
                 debug('processing', acc.get("name","?"), f'(id={acc_id}, auto_join={aj})')
+                if acc.get('package_name') and acc.get('remote'):
+                    debug(acc.get("name","?"), 'remote account, skipping (managed by Termux)')
+                    continue
                 instance = acc.get('mumu_instance', 0)
                 package = acc.get('package_name', get_package_name(instance))
                 serial = get_serial(instance)
