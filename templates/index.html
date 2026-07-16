@@ -1034,11 +1034,24 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Package Name <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(Roblox app package - auto-filled from remote monitor)</span></label>
-                    <input type="text" class="input" id="accPackage" placeholder="com.roblox.client" style="font-family:monospace;font-size:12px">
+                    <label>Platform</label>
+                    <div style="display:flex;gap:8px;margin-top:4px">
+                        <button type="button" class="btn btn-sm btn-primary" id="btnPlatformCloudphone" onclick="setPlatform('cloudphone')" style="flex:1">
+                            <i class="fas fa-mobile-alt"></i> Cloudphone (Termux/Redfinger)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-secondary" id="btnPlatformMumu" onclick="setPlatform('mumu')" style="flex:1">
+                            <i class="fas fa-desktop"></i> MuMu (Windows VM)
+                        </button>
+                    </div>
+                    <input type="hidden" id="accPlatform" value="cloudphone">
                 </div>
-                <div class="form-group">
-                    <label>MuMu Instance <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(for MuMu VM on Windows, ignore for Termux)</span></label>
+                <div class="form-group" id="pkgNameGroup">
+                    <label>Package Name <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(auto-filled from remote monitor)</span></label>
+                    <input type="text" class="input" id="accPackage" placeholder="com.roblox.client" style="font-family:monospace;font-size:12px">
+                    <div id="remotePkgButtons" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div>
+                </div>
+                <div class="form-group" id="mumuInstGroup" style="display:none">
+                    <label>MuMu Instance</label>
                     <select class="input" id="accInstance"></select>
                 </div>
             </div>

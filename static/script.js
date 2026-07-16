@@ -904,23 +904,19 @@ async function loadRemotePackages() {
                 }
             });
         });
+        const container = document.getElementById('remotePkgButtons');
+        if (!container) return;
+        container.innerHTML = '';
         if (!available.length) return;
-        const pkgInput = document.getElementById('accPackage');
-        const existing = pkgInput.parentElement.querySelector('.remote-pkg-list');
-        if (existing) existing.remove();
-        const list = document.createElement('div');
-        list.className = 'remote-pkg-list';
-        list.style.cssText = 'margin-top:6px;display:flex;flex-wrap:wrap;gap:4px';
         available.forEach(pkg => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'btn btn-sm btn-secondary';
             btn.style.cssText = 'font-size:10px;font-family:monospace;padding:2px 8px';
             btn.textContent = pkg;
-            btn.onclick = () => { pkgInput.value = pkg; };
-            list.appendChild(btn);
+            btn.onclick = () => { document.getElementById('accPackage').value = pkg; };
+            container.appendChild(btn);
         });
-        pkgInput.parentElement.appendChild(list);
     } catch(e) {}
 }
 
@@ -1076,6 +1072,25 @@ async function deltaRefreshKey(accId) {
     refreshData();
 }
 
+function setPlatform(platform) {
+    document.getElementById('accPlatform').value = platform;
+    const btnCloud = document.getElementById('btnPlatformCloudphone');
+    const btnMumu = document.getElementById('btnPlatformMumu');
+    const pkgGroup = document.getElementById('pkgNameGroup');
+    const mumuGroup = document.getElementById('mumuInstGroup');
+    if (platform === 'cloudphone') {
+        btnCloud.className = 'btn btn-sm btn-primary';
+        btnMumu.className = 'btn btn-sm btn-secondary';
+        pkgGroup.style.display = 'block';
+        mumuGroup.style.display = 'none';
+    } else {
+        btnCloud.className = 'btn btn-sm btn-secondary';
+        btnMumu.className = 'btn btn-sm btn-primary';
+        pkgGroup.style.display = 'none';
+        mumuGroup.style.display = 'block';
+    }
+}
+
 function showAddAccount() {
     document.getElementById('accountModalTitle').textContent = 'Tambah Account';
     document.getElementById('editAccountId').value = '';
@@ -1083,6 +1098,7 @@ function showAddAccount() {
     document.getElementById('accCookie').value = '';
     document.getElementById('accInstance').value = '0';
     document.getElementById('accPackage').value = '';
+    setPlatform('cloudphone');
     openModal('accountModal');
     updateAccountSelect();
     loadRemotePackages();
@@ -1108,12 +1124,19 @@ async function saveAccount() {
     const name = document.getElementById('accName').value.trim();
     const cookie = document.getElementById('accCookie').value.trim();
     const { server_ids, server_id } = getServerCheckData();
+    const platform = document.getElementById('accPlatform').value;
 
     if (!name) { showToast('Nama account harus diisi', 'warning'); return; }
 
-    const mumu_instance = parseInt(document.getElementById('accInstance').value) || 0;
-    const package_name = document.getElementById('accPackage').value.trim();
-    const data = { name, cookie, server_id, server_ids, mumu_instance, package_name };
+    const data = { name, cookie, server_id, server_ids };
+
+    if (platform === 'cloudphone') {
+        data.package_name = document.getElementById('accPackage').value.trim();
+        data.mumu_instance = 0;
+    } else {
+        data.mumu_instance = parseInt(document.getElementById('accInstance').value) || 0;
+        data.package_name = '';
+    }
 
     if (id) {
         await api('PUT', `/api/accounts/${id}`, data);
@@ -1133,8 +1156,11 @@ async function editAccount(id) {
     document.getElementById('accCookie').value = acc.cookie || '';
     document.getElementById('accPackage').value = acc.package_name || '';
     document.getElementById('accInstance').value = (acc.mumu_instance != null) ? acc.mumu_instance : 0;
+    const platform = acc.package_name ? 'cloudphone' : 'mumu';
+    setPlatform(platform);
     openModal('accountModal');
     updateAccountSelect();
+    if (platform === 'cloudphone') loadRemotePackages();
 }
 
 async function showAccountProfile(accId) {
