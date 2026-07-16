@@ -1,7 +1,8 @@
-import os, time, subprocess, threading
+import os, time, subprocess, threading, re
 
 from models import settings, save_data
 from models import _serial_locks, _adb_global_lock
+from config import IS_TERMUX, IS_ARM
 
 def find_adb():
     if settings.get('adb_path') and os.path.isfile(settings['adb_path']):
@@ -15,6 +16,13 @@ def find_adb():
         r'C:\Program Files (x86)\Nox\bin\adb.exe',
         'adb.exe',
     ]
+    if IS_TERMUX:
+        candidates = [
+            '/data/data/com.termux/files/usr/bin/adb',
+            os.path.expanduser('~/.termux/bin/adb'),
+            os.path.expanduser('$PREFIX/bin/adb'),
+            'adb',
+        ] + candidates
     for c in candidates:
         try:
             r = subprocess.run([c, '--version'], capture_output=True, timeout=5)
@@ -90,23 +98,23 @@ def adb_connect(serial):
     except Exception as e:
         return False, str(e)
 
-def adb_check_roblox(serial):
+def adb_check_roblox(serial, package='com.roblox.client'):
     adb = find_adb()
     if not adb: return False
     try:
-        r = _adb_run([adb, '-s', serial, 'shell', 'pidof', 'com.roblox.client'],
+        r = _adb_run([adb, '-s', serial, 'shell', 'pidof', package],
             serial=serial, capture_output=True, text=True, timeout=10)
         pid = r.stdout.strip()
-        return bool(pid and pid.isdigit())
+        return bool(pid and pid.split()[0].isdigit())
     except Exception as e:
-        print(f'[ADB] check_roblox error ({serial}): {e}')
+        print(f'[ADB] check_roblox error ({serial}, {package}): {e}')
         return False
 
-def adb_get_thread_count(serial):
+def adb_get_thread_count(serial, package='com.roblox.client'):
     adb = find_adb()
     if not adb: return None
     try:
-        r = _adb_run([adb, '-s', serial, 'shell', 'pidof', 'com.roblox.client'],
+        r = _adb_run([adb, '-s', serial, 'shell', 'pidof', package],
             serial=serial, capture_output=True, text=True, timeout=10)
         pid_str = r.stdout.strip()
         if not pid_str:
@@ -125,11 +133,11 @@ def adb_get_thread_count(serial):
     except:
         return None
 
-def adb_force_stop_roblox(serial):
+def adb_force_stop_roblox(serial, package='com.roblox.client'):
     adb = find_adb()
     if not adb: return
     try:
-        _adb_run([adb, '-s', serial, 'shell', 'am', 'force-stop', 'com.roblox.client'],
+        _adb_run([adb, '-s', serial, 'shell', 'am', 'force-stop', package],
             serial=serial, capture_output=True, timeout=10)
     except:
         pass
@@ -149,34 +157,34 @@ def adb_dismiss_dialogs(serial):
     except:
         pass
 
-def adb_detect_kicked_dialog(serial):
+def adb_detect_kicked_dialog(serial, package='com.roblox.client'):
     adb = find_adb()
     if not adb: return None
     pid = None
     try:
-        r = _adb_run([adb, '-s', serial, 'shell', 'pidof', 'com.roblox.client'],
+        r = _adb_run([adb, '-s', serial, 'shell', 'pidof', package],
             serial=serial, capture_output=True, text=True, timeout=5)
         pid = r.stdout.strip()
     except Exception as e:
-        print(f'[KICKED] pidof error ({serial}): {e}')
+        print(f'[KICKED] pidof error ({serial}, {package}): {e}')
     if not pid:
         return None
     try:
         r = _adb_run([adb, '-s', serial, 'shell', 'dumpsys', 'window', 'windows'],
             serial=serial, capture_output=True, text=True, timeout=10)
         out = r.stdout.lower()
-        if 'com.roblox.client' not in out:
+        if package not in out:
             return None
         for line in out.split('\n'):
-            if 'mIsFloatingLayer=true' in line and 'com.roblox.client' in line:
+            if 'mIsFloatingLayer=true' in line and package in line:
                 return '1a_floating'
         for line in out.split('\n'):
-            if 'com.roblox.client' in line.lower() and any(k in line.lower() for k in
+            if package in line.lower() and any(k in line.lower() for k in
                 ['disconnected', 'kicked', 'reconnecting', 'you were kicked',
                  'you have been kicked', 'connection lost']):
                 return '1b_title:' + line.strip()[:60]
     except Exception as e:
-        print(f'[KICKED] dumpsys error ({serial}): {e}')
+        print(f'[KICKED] dumpsys error ({serial}, {package}): {e}')
 
     for compressed in [True, False]:
         try:
@@ -220,23 +228,21 @@ def _adb_get_focused(serial):
                 focus = val.lower()
     return focus
 
-def adb_check_in_game(serial):
+def adb_check_in_game(serial, package='com.roblox.client'):
     if not find_adb(): return None
     try:
         focus = _adb_get_focused(serial)
         if focus is None:
             return None
-        if 'com.roblox.client' not in focus:
+        if package not in focus:
             return None
         if any(x in focus for x in ['dialog', 'alert', 'popup', 'notification']):
-            # Tidak return False — di MuMu keyword ini sering false positive.
-            # Biarkan thread count sebagai penentu in-game yang lebih reliable.
             pass
         rblx_windows = 0
         out = _adb_dumpsys(serial, ['shell', 'dumpsys', 'window', 'windows'])
         if out:
             for line in out.split('\n'):
-                if line.startswith('  Window #') and 'com.roblox.client' in line:
+                if line.startswith('  Window #') and package in line:
                     if 'mIsFloatingLayer=true' not in line:
                         rblx_windows += 1
         if rblx_windows >= 2:
@@ -259,7 +265,7 @@ def adb_screenshot(serial):
         pass
     return None
 
-def adb_check_join_failed(serial):
+def adb_check_join_failed(serial, package='com.roblox.client'):
     adb = find_adb()
     if not adb: return None
     try:
@@ -279,8 +285,9 @@ def adb_check_join_failed(serial):
 
 def auto_push_script_to_vm(acc, serial):
     from blueprints.misc import make_script_for
-    from models import settings, log_account as _log_account
+    from models import settings, log_account as _log_account, get_package_name
     name = acc.get('name', 'Account')
+    package = acc.get('package_name', get_package_name(acc.get('mumu_instance', 0)))
     url = settings.get('dashboard_url', 'http://localhost:5000')
     script = make_script_for(name, url)
     import tempfile, os
@@ -288,9 +295,10 @@ def auto_push_script_to_vm(acc, serial):
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(script)
-        code, out = adb_cmd(['push', tmp, '/sdcard/Delta/Autoexecute/monitor.luau'], serial)
+        script_path = f'/data/data/{package}/files/Delta/Autoexecute/monitor.luau'
+        code, out = adb_cmd(['push', tmp, script_path], serial)
         if code == 0:
-            _log_account(acc.get('id', ''), name, 'Script auto-push ke Delta Autoexecute')
+            _log_account(acc.get('id', ''), name, f'Script auto-push ke {package} Autoexecute')
             return True, 'OK'
         return False, out
     except Exception as e:
@@ -298,3 +306,47 @@ def auto_push_script_to_vm(acc, serial):
     finally:
         try: os.remove(tmp)
         except: pass
+
+def discover_roblox_packages(serial=None):
+    adb = find_adb()
+    if not adb: return []
+    try:
+        r = adb_cmd(['shell', 'pm', 'list', 'packages'], serial)
+        if r and r[0] == 0 and r[1]:
+            found = []
+            for line in r[1].split('\n'):
+                pkg = line.replace('package:', '').strip()
+                if 'roblox' in pkg.lower():
+                    found.append(pkg)
+            return sorted(found)
+    except:
+        pass
+    return []
+
+def adb_set_freeform(serial, package):
+    adb = find_adb()
+    if not adb: return False
+    try:
+        r = _adb_run([adb, '-s', serial, 'shell', 'am', 'start', '-n', f'{package}/.Activity',
+            '--windowingMode', '6'], serial=serial, capture_output=True, text=True, timeout=10)
+        return r.returncode == 0
+    except:
+        return False
+
+def adb_move_window(serial, package, x, y, w, h):
+    adb = find_adb()
+    if not adb: return False
+    try:
+        _adb_run([adb, '-s', serial, 'shell', 'am', 'start', '-n', f'{package}/.Activity',
+            '--windowingMode', '6',
+            '--eias', f'{x},{y},{x+w},{y+h}'],
+            serial=serial, capture_output=True, timeout=10)
+        return True
+    except:
+        return False
+
+def adb_screenshot_package(serial, package='com.roblox.client'):
+    data = adb_screenshot(serial)
+    if data is None:
+        return None
+    return data

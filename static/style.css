@@ -1934,25 +1934,261 @@ select.input {
     flex-wrap: wrap;
     gap: 4px;
 }
-.inventory-item {
-    display: inline-flex;
+/* Inventory Section Styles */
+.inventory-accounts-section {
+    margin-bottom: 24px;
+}
+.inventory-section-header {
+    display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.inventory-section-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
     background: var(--bg-input);
     border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--accent-1);
+}
+.inventory-section-header h3 {
+    font-size: 18px;
+    font-weight: 700;
     color: var(--text-primary);
+    margin: 0;
+}
+.inventory-section-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+}
+.inventory-accounts-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+.inventory-account-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.inventory-account-card:hover {
+    border-color: var(--accent-1);
+    transform: translateY(-2px);
+}
+.inventory-account-card.selected {
+    border-color: var(--accent-1);
+    background: var(--accent-subtle);
+}
+.inventory-account-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+.inventory-account-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.inventory-account-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+}
+.inventory-account-stat {
+    display: flex;
+    flex-direction: column;
+}
+.inventory-account-stat-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.inventory-account-stat-value {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.inventory-items-section {
+    margin-bottom: 24px;
+}
+.inventory-items-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.inventory-search {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+.inventory-search .input {
+    width: 200px;
+}
+.inventory-category-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.category-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
     transition: all 0.15s ease;
 }
-.inventory-item:hover {
+.category-tab:hover {
     border-color: var(--accent-1);
-    background: var(--bg-elevated);
 }
-.inventory-item.equipped {
-    border-color: var(--green);
-    background: rgba(34, 197, 94, 0.1);
+.category-tab.active {
+    background: var(--accent-1);
+    border-color: var(--accent-1);
+    color: white;
+}
+.category-tab .count {
+    background: rgba(255,255,255,0.2);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+}
+.category-tab.active .count {
+    background: rgba(255,255,255,0.3);
+}
+.inventory-items-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+}
+.inventory-item-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    position: relative;
+}
+.inventory-item-card:hover {
+    border-color: var(--accent-1);
+    transform: translateY(-1px);
+}
+.inventory-item-card.rarity-legendary {
+    border-left: 3px solid #ef4444;
+}
+.inventory-item-card.rarity-epic {
+    border-left: 3px solid #f59e0b;
+}
+.inventory-item-card.rarity-rare {
+    border-left: 3px solid #a855f7;
+}
+.inventory-item-card.rarity-mythic {
+    border-left: 3px solid #dc2626;
+}
+.inventory-item-card.rarity-super {
+    border-left: 3px solid #06b6d4;
+}
+.inventory-item-thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--bg-input);
+    flex-shrink: 0;
+}
+.inventory-item-info {
+    flex: 1;
+    min-width: 0;
+}
+.inventory-item-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.inventory-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.inventory-item-qty {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.inventory-item-bottom {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+.inventory-item-category {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+.cat-seed { background: rgba(34,197,94,0.15); color: #22c55e; }
+.cat-fruit { background: rgba(239,68,68,0.15); color: #ef4444; }
+.cat-pet { background: rgba(168,85,247,0.15); color: #a855f7; }
+.cat-egg { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.cat-seed-pack { background: rgba(34,197,94,0.15); color: #22c55e; }
+.cat-gear { background: rgba(6,182,212,0.15); color: #06b6d4; }
+.cat-other { background: rgba(107,114,128,0.15); color: #6b7280; }
+.inventory-item-rarity {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.rarity-common { background: rgba(34,197,94,0.15); color: #22c55e; }
+.rarity-uncommon { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.rarity-rare { background: rgba(168,85,247,0.15); color: #a855f7; }
+.rarity-epic { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.rarity-legendary { background: rgba(239,68,68,0.15); color: #ef4444; }
+.rarity-mythic { background: rgba(220,38,38,0.15); color: #dc2626; }
+.rarity-super { background: rgba(6,182,212,0.15); color: #06b6d4; }
+.inventory-item-price {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.inventory-item-accounts {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+.inventory-item-accounts i {
+    margin-right: 2px;
 }
 .item-thumb {
     width: 24px;

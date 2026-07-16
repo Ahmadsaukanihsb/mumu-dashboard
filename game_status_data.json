@@ -1,0 +1,97 @@
+{
+  "weather_events": [
+    {
+      "name": "Rain",
+      "icon": "🌧️",
+      "color": "#3b82f6",
+      "effect": "Doubles growth speed for every plant",
+      "mutation": null,
+      "mutation_multiplier": null
+    },
+    {
+      "name": "Rainbow",
+      "icon": "🌈",
+      "color": "#a855f7",
+      "effect": "Boosted Rainbow luck — far higher chance of Rainbow crops",
+      "mutation": "Rainbow",
+      "mutation_multiplier": 30
+    },
+    {
+      "name": "Lightning",
+      "icon": "⚡",
+      "color": "#eab308",
+      "effect": "Crops can gain the Electric mutation",
+      "mutation": "Electric",
+      "mutation_multiplier": 25
+    },
+    {
+      "name": "Snowfall",
+      "icon": "❄️",
+      "color": "#06b6d4",
+      "effect": "Crops can gain the Frozen mutation",
+      "mutation": "Frozen",
+      "mutation_multiplier": 20
+    },
+    {
+      "name": "Starfall",
+      "icon": "⭐",
+      "color": "#f59e0b",
+      "effect": "Crops can gain the Starstruck mutation",
+      "mutation": "Starstruck",
+      "mutation_multiplier": 50
+    },
+    {
+      "name": "Aurora",
+      "icon": "🌌",
+      "color": "#8b5cf6",
+      "effect": "Crops can gain the Aurora mutation",
+      "mutation": "Aurora",
+      "mutation_multiplier": 40
+    },
+    {
+      "name": "Sunburst",
+      "icon": "☀️",
+      "color": "#f97316",
+      "effect": "Crops can gain the Ignited mutation",
+      "mutation": "Ignited",
+      "mutation_multiplier": 60
+    }
+  ],
+  "mutations": [
+    {"name": "Bloodlit", "multiplier": 70, "how_to_get": "Special event", "icon": "🩸", "color": "#dc2626"},
+    {"name": "Ignited", "multiplier": 60, "how_to_get": "Sunburst weather", "icon": "🔥", "color": "#f97316"},
+    {"name": "Starstruck", "multiplier": 50, "how_to_get": "Starfall weather", "icon": "⭐", "color": "#f59e0b"},
+    {"name": "Aurora", "multiplier": 40, "how_to_get": "Aurora weather", "icon": "🌌", "color": "#8b5cf6"},
+    {"name": "Rainbow", "multiplier": 30, "how_to_get": "Rare growth roll; boosted by Rainbow weather", "icon": "🌈", "color": "#a855f7"},
+    {"name": "Electric", "multiplier": 25, "how_to_get": "Lightning weather", "icon": "⚡", "color": "#eab308"},
+    {"name": "Frozen", "multiplier": 20, "how_to_get": "Snowfall weather", "icon": "❄️", "color": "#06b6d4"},
+    {"name": "Gold", "multiplier": 10, "how_to_get": "Random chance as crops grow", "icon": "🥇", "color": "#fbbf24"},
+    {"name": "Chained", "multiplier": 8, "how_to_get": "Special event", "icon": "⛓️", "color": "#6b7280"}
+  ],
+  "seasonal_events": [
+    {
+      "name": "Carrot Frenzy",
+      "icon": "🥕",
+      "description": "Team up and fill the community bar!",
+      "status": "active",
+      "start_date": "2026-06-01",
+      "end_date": "2026-07-31"
+    },
+    {
+      "name": "Summer Harvest",
+      "icon": "🌻",
+      "description": "Harvest summer crops for bonus rewards!",
+      "status": "upcoming",
+      "start_date": "2026-07-01",
+      "end_date": "2026-08-31"
+    },
+    {
+      "name": "Mystery Drop",
+      "icon": "🎁",
+      "description": "New items arriving soon!",
+      "status": "upcoming",
+      "start_date": "2026-07-15",
+      "end_date": "2026-07-15"
+    }
+  ]
+}

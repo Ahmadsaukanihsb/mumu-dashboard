@@ -149,10 +149,11 @@ async function api(method, url, body = null) {
         };
         if (body) opts.body = JSON.stringify(body);
         const res = await fetch(url, opts);
+        const data = await res.json();
         if (!res.ok) {
-            return { _error: true, _status: res.status, _statusText: res.statusText };
+            return { _error: true, _status: res.status, ...data };
         }
-        return await res.json();
+        return data;
     } catch (err) {
         console.error(err);
         return null;
@@ -488,6 +489,7 @@ function updateAccountsTable() {
                             <button class="btn" onclick="switchPage('logs');setTimeout(()=>selectAccountLog('${a.id}'),100)"><i class="fas fa-clipboard-list"></i> Logs</button>
                             <button class="btn" onclick="pushScript('${a.id}')"><i class="fas fa-upload"></i> Push Script</button>
                             <button class="btn" onclick="verifyAccount('${a.id}')"><i class="fas fa-check-circle"></i> Verify</button>
+                            <button class="btn btn-warning" onclick="rollbackAccount('${a.id}')"><i class="fas fa-undo"></i> Rollback</button>
                             <button class="btn" onclick="editAccount('${a.id}')"><i class="fas fa-edit"></i> Edit</button>
                             <button class="btn" onclick="moveAccountVM('${a.id}', '${esc(a.name)}', ${a.mumu_instance != null ? a.mumu_instance : 0})"><i class="fas fa-desktop"></i> Pindah VM</button>
                             <button class="btn btn-danger" onclick="deleteAccount('${a.id}')"><i class="fas fa-trash"></i> Delete</button>
@@ -617,62 +619,234 @@ function updateActivityLog() {
     `).join('');
 }
 
+// Current filter state for inventory
+let currentCategory = 'All';
+let currentAccount = 'all';
+
+function getItemCategory(itemName) {
+    const name = itemName.toLowerCase();
+    if (['shovel','trowel','watering can','axe','pickaxe','megaphone','build','teleporter','ladder','sign','wheelbarrow','basic pot','flashbang','sprinkler','super sprinkler','legendary sprinkler','common sprinkler','uncommon sprinkler','rare sprinkler'].some(t => name.includes(t))) return 'Gear';
+    if (['egg','common egg','rare egg','legendary egg'].some(t => name.includes(t))) return 'Egg';
+    if (['seed pack','rare seed pack','uncommon seed pack','legendary seed pack','common seed pack'].some(t => name.includes(t))) return 'Seed Pack';
+    if (['mushroom','bamboo','tomato','corn','tulip','blueberry','carrot','sunflower','cactus','strawberry','pineapple','apple','dragon fruit','poison apple','moon bloom','cherry','acorn','coconut','banana','grape','green bean','pomegranate','baby cactus','horned melon','mango','fire fern','ghost pepper','venom spitter','dragon breath','hypno bloom','rocket pop'].some(t => name.includes(t))) return 'Seed';
+    if (['bear','bunny','turtle','robin','deer','unicorn','owl','frog','dragonfly','bee','butterfly','monkey','raccoon','black dragon','ice serpent','bald eagle'].some(t => name.includes(t))) return 'Pet';
+    if (['fruit','fruits'].some(t => name.includes(t))) return 'Fruit';
+    if (['crate','pack'].some(t => name.includes(t))) return 'Seed Pack';
+    return 'Other';
+}
+
+function getItemRarity(itemName) {
+    const name = itemName.toLowerCase();
+    if (['rocket pop'].some(t => name.includes(t))) return 'Legendary';
+    if (['mushroom','hypno bloom','moon bloom','venom spitter','dragon breath','dragon fruit','fire fern','sunflower','poison ivy','pomegranate','poison apple','cherry','acorn','horned melon','common egg','rare egg','legendary egg'].some(t => name.includes(t))) return 'Rare';
+    if (['bamboo','baby cactus','cactus','corn','pineapple','coconut','grape','banana','tulip','green bean'].some(t => name.includes(t))) return 'Uncommon';
+    if (['tomato','apple','blueberry','carrot','strawberry'].some(t => name.includes(t))) return 'Common';
+    if (['bear','unicorn','golden dragonfly','black dragon','ice serpent','raccoon','monkey','bald eagle'].some(t => name.includes(t))) return 'Mythic';
+    if (['robin','turtle','deer','bee','butterfly'].some(t => name.includes(t))) return 'Legendary';
+    if (['owl','bunny','frog'].some(t => name.includes(t))) return 'Uncommon';
+    if (['gnome','flashbang','teleporter','megaphone'].some(t => name.includes(t))) return 'Epic';
+    if (['common sprinkler','uncommon sprinkler'].some(t => name.includes(t))) return 'Common';
+    if (['rare sprinkler'].some(t => name.includes(t))) return 'Rare';
+    if (['legendary sprinkler'].some(t => name.includes(t))) return 'Legendary';
+    if (['super sprinkler','super watering can'].some(t => name.includes(t))) return 'Super';
+    return 'Common';
+}
+
+function formatSellValue(value) {
+    if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+    if (value >= 1000) return (value / 1000).toFixed(0) + 'K';
+    return value.toString();
+}
+
 function updateInventory() {
-    const grid = document.getElementById('inventoryGrid');
-    if (!grid) return;
+    const accountsList = document.getElementById('inventoryAccountsList');
+    const itemsSummary = document.getElementById('inventoryItemsSummary');
+    const categoryTabs = document.getElementById('inventoryCategoryTabs');
+    const grid = document.getElementById('inventoryItemsGrid');
+    
+    if (!accountsList || !grid) return;
+    
     const accNames = Object.keys(inventoryData);
     if (accNames.length === 0) {
-        grid.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i> Belum ada data inventory</div>';
+        accountsList.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i> Belum ada data inventory</div>';
+        grid.innerHTML = '';
         return;
     }
-    grid.innerHTML = accNames.map(name => {
+    
+    // Filter: only show accounts that are online/active
+    const onlineStatuses = ['connected', 'monitoring', 'active'];
+    const onlineAccounts = accounts.filter(a => onlineStatuses.includes(a.status));
+    const onlineNames = onlineAccounts.map(a => a.name);
+    
+    // Only show inventory for online accounts
+    const onlineAccNames = accNames.filter(name => onlineNames.includes(name));
+    
+    // Calculate total sheckles and net worth
+    let totalSheckles = 0;
+    let totalWorth = 0;
+    const accountCards = onlineAccNames.map(name => {
         const data = inventoryData[name];
-        const items = data.items || [];
-        const categories = {};
-        items.forEach(item => {
-            let cat = 'Other';
-            const lname = item.name.toLowerCase();
-            if (['shovel','trowel','watering can','axe','pickaxe','megaphone','build','teleporter','rake','hoe'].some(t => lname.includes(t))) cat = 'Tools';
-            else if (['sprinkler'].some(t => lname.includes(t))) cat = 'Sprinklers';
-            else if (['seed','plant','flower','tree','mushroom','bamboo','tomato','corn','tulip','blueberry','carrot','sunflower','cactus','strawberry','pineapple','apple','dragon fruit','poison apple','moon bloom','rare seed','common seed','uncommon seed','legendary seed'].some(t => lname.includes(t))) cat = 'Seeds & Plants';
-            else if (['gnome','fountain','bench','statue','lamp','decoration','path','fence','pond','bridge'].some(t => lname.includes(t))) cat = 'Decorations';
-            else if (['golden','rainbow','mega','gold','diamond','crystal','neon','legendary','mythic'].some(t => lname.includes(t))) cat = 'Special';
-            else if (['bear','bunny','turtle','robin','deer','unicorn','owl','frog','dragonfly','cat','dog','bird','hamster','butterfly','bee','fox','wolf','dragon','phoenix'].some(t => lname.includes(t))) cat = 'Animals';
-            if (!categories[cat]) categories[cat] = [];
-            categories[cat].push(item);
-        });
         const sheckles = data.sheckles || 0;
-        const shecklesFormatted = sheckles > 0 ? sheckles.toLocaleString() : '0';
+        totalSheckles += sheckles;
+        const items = data.items || [];
+        items.forEach(item => {
+            const price = itemThumbnails[item.name + '_price'] || 0;
+            totalWorth += price * (item.count || 0);
+        });
+        const acc = accounts.find(a => a.name === name);
+        const statusBadge = acc ? `<span class="badge badge-${acc.status === 'active' ? 'success' : 'info'}" style="font-size:9px;margin-left:4px">${acc.status}</span>` : '';
         return `
-        <div class="inventory-card">
-            <div class="inventory-header">
-                <div class="inventory-avatar">${name.charAt(0).toUpperCase()}</div>
-                <div class="inventory-info">
-                    <div class="inventory-name">${esc(name)}</div>
-                    <div class="inventory-meta">${items.length} item types · ${data.total || 0} total items</div>
-                    <div class="inventory-sheckles"><i class="fas fa-coins" style="color:var(--yellow)"></i> ${shecklesFormatted} Sheckles</div>
+        <div class="inventory-account-card ${currentAccount === name ? 'selected' : ''}" onclick="filterByAccount('${esc(name)}')">
+            <div class="inventory-account-avatar">${name.charAt(0).toUpperCase()}</div>
+            <div class="inventory-account-name">${esc(name)}${statusBadge}</div>
+            <div class="inventory-account-stats">
+                <div class="inventory-account-stat">
+                    <span class="inventory-account-stat-label">Sheckles</span>
+                    <span class="inventory-account-stat-value">${sheckles > 0 ? formatSellValue(sheckles) : '0'}</span>
                 </div>
-            </div>
-            <div class="inventory-items">
-                ${Object.entries(categories).map(([cat, catItems]) => `
-                    <div class="inventory-category">
-                        <div class="inventory-category-title">${cat} (${catItems.length})</div>
-                        <div class="inventory-item-list">
-                            ${catItems.map(item => {
-                                const thumb = item.thumbnail || itemThumbnails[item.name] || '';
-                                const imgHtml = thumb ? `<img src="${esc(thumb)}" class="item-thumb" onerror="this.style.display='none'" loading="lazy">` : '';
-                                return `
-                                <span class="inventory-item ${item.equipped ? 'equipped' : ''}">
-                                    ${imgHtml}
-                                    <span class="item-name">${esc(item.name)}</span>${item.count > 1 ? ` <span class="item-count">x${item.count}</span>` : ''}
-                                </span>`;
-                            }).join('')}
-                        </div>
-                    </div>
-                `).join('')}
+                <div class="inventory-account-stat">
+                    <span class="inventory-account-stat-label">Items</span>
+                    <span class="inventory-account-stat-value">${items.length}</span>
+                </div>
             </div>
         </div>`;
     }).join('');
+    
+    accountsList.innerHTML = `
+        <div class="inventory-account-card ${currentAccount === 'all' ? 'selected' : ''}" onclick="filterByAccount('all')">
+            <div class="inventory-account-avatar" style="background: linear-gradient(135deg, #22c55e, #16a34a)"><i class="fas fa-users"></i></div>
+            <div class="inventory-account-name">All accounts</div>
+            <div class="inventory-account-stats">
+                <div class="inventory-account-stat">
+                    <span class="inventory-account-stat-label">Accounts</span>
+                    <span class="inventory-account-stat-value">${onlineAccNames.length}</span>
+                </div>
+                <div class="inventory-account-stat">
+                    <span class="inventory-account-stat-label">Net Worth</span>
+                    <span class="inventory-account-stat-value">${formatSellValue(totalWorth)}</span>
+                </div>
+            </div>
+        </div>
+        ${accountCards}`;
+    
+    // Collect all unique items across online accounts
+    const allItems = {};
+    onlineAccNames.forEach(name => {
+        const data = inventoryData[name];
+        const items = data.items || [];
+        items.forEach(item => {
+            const key = item.name || item.id;
+            if (!allItems[key]) {
+                allItems[key] = {
+                    name: item.name || item.id,
+                    id: item.id || '',
+                    count: 0,
+                    thumbnail: item.thumbnail || itemThumbnails[item.name] || '',
+                    category: getItemCategory(item.name || item.id),
+                    rarity: getItemRarity(item.name || item.id),
+                    accounts: []
+                };
+            }
+            allItems[key].count += item.count || 1;
+            if (!allItems[key].accounts.includes(name)) {
+                allItems[key].accounts.push(name);
+            }
+        });
+    });
+    
+    const itemList = Object.values(allItems);
+    const uniqueCount = itemList.length;
+    
+    // Count items by category
+    const categoryCounts = { All: uniqueCount, Pet: 0, Seed: 0, Fruit: 0, Egg: 0, 'Seed Pack': 0, Gear: 0, Other: 0 };
+    itemList.forEach(item => {
+        if (categoryCounts[item.category] !== undefined) {
+            categoryCounts[item.category]++;
+        } else {
+            categoryCounts.Other++;
+        }
+    });
+    
+    // Update summary
+    itemsSummary.textContent = `All accounts · ${uniqueCount} unique`;
+    
+    // Render category tabs
+    categoryTabs.innerHTML = Object.entries(categoryCounts)
+        .filter(([cat, count]) => count > 0)
+        .map(([cat, count]) => `
+            <div class="category-tab ${currentCategory === cat ? 'active' : ''}" onclick="filterByCategory('${esc(cat)}')">
+                ${cat} <span class="count">${count}</span>
+            </div>
+        `).join('');
+    
+    // Filter items by category and account
+    let filtered = itemList;
+    if (currentCategory !== 'All') {
+        filtered = filtered.filter(item => item.category === currentCategory);
+    }
+    if (currentAccount !== 'all') {
+        filtered = filtered.filter(item => item.accounts.includes(currentAccount));
+    }
+    
+    // Apply search filter
+    const searchTerm = document.getElementById('inventorySearch')?.value?.toLowerCase() || '';
+    if (searchTerm) {
+        filtered = filtered.filter(item => item.name.toLowerCase().includes(searchTerm));
+    }
+    
+    // Sort by count descending
+    filtered.sort((a, b) => b.count - a.count);
+    
+    // Render items
+    grid.innerHTML = filtered.map(item => {
+        const thumb = item.thumbnail;
+        const imgHtml = thumb ? `<img src="${esc(thumb)}" class="inventory-item-thumb" onerror="this.style.display='none'" loading="lazy">` : '<div class="inventory-item-thumb"><i class="fas fa-box" style="font-size:16px;color:var(--text-muted)"></i></div>';
+        const rarityClass = item.rarity.toLowerCase().replace(' ', '-');
+        const catClass = item.category.toLowerCase().replace(' ', '-');
+        
+        return `
+        <div class="inventory-item-card rarity-${rarityClass}">
+            ${imgHtml}
+            <div class="inventory-item-info">
+                <div class="inventory-item-top">
+                    <span class="inventory-item-name">${esc(item.name)}</span>
+                    <span class="inventory-item-qty">&times;${item.count.toLocaleString()}</span>
+                </div>
+                <div class="inventory-item-bottom">
+                    <span class="inventory-item-category cat-${catClass}">${item.category}</span>
+                    <span class="inventory-item-rarity rarity-${rarityClass}">${item.rarity}</span>
+                    <span class="inventory-item-accounts"><i class="fas fa-user"></i> ${item.accounts.length}</span>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function filterByCategory(category) {
+    currentCategory = category;
+    updateInventory();
+}
+
+function filterByAccount(account) {
+    currentAccount = account;
+    // Update selected state
+    document.querySelectorAll('.inventory-account-card').forEach(card => {
+        card.classList.remove('selected');
+        // Find the card that matches the account
+        const nameEl = card.querySelector('.inventory-account-name');
+        if (nameEl) {
+            const cardName = nameEl.textContent.trim().toLowerCase();
+            if ((account === 'all' && cardName.includes('all accounts')) ||
+                (account !== 'all' && cardName.includes(account.toLowerCase()))) {
+                card.classList.add('selected');
+            }
+        }
+    });
+    updateInventory();
+}
+
+function filterInventoryItems() {
+    updateInventory();
 }
 
 async function refreshInventory() {
@@ -1147,6 +1321,17 @@ async function verifyAccount(accId) {
         alert(`✓ Cookie valid!\nUsername: ${res.username}\nRobux: ${res.robux}`);
     } else {
         alert(`✗ Cookie invalid: ${res?.error || 'unknown'}`);
+    }
+    refreshData();
+}
+
+async function rollbackAccount(accId) {
+    if (!confirm('Rollback akun ini?\nRoblox akan force-stop + rejoin (item consumption di-revert).')) return;
+    const res = await api('POST', `/api/accounts/${accId}/rollback`);
+    if (res && res.success) {
+        showToast('Rollback executed: force-stop + rejoin', 'success');
+    } else {
+        showToast('Rollback failed: ' + (res?.error || 'unknown'), 'error');
     }
     refreshData();
 }
@@ -1886,6 +2071,8 @@ async function loadMailboxAccounts() {
         }
         
         const accounts = resp.accounts || [];
+        window._mailboxAccounts = accounts;
+        
         const select = document.getElementById('mailboxAccountSelect');
         select.innerHTML = '<option value="">— Pilih Akun —</option>';
         
@@ -1961,15 +2148,23 @@ function renderMailboxInventory() {
     let html = '';
     filtered.forEach(item => {
         const isSelected = mailboxSelectedItems.some(s => s.name === item.name);
-        const hasUuid = item.id && item.id !== '';
+        const hasUuid = item.id && item.id !== '' && item.id !== item.name;
+        
+        // Tampilkan nama item dengan benar
+        let displayName = item.name;
+        if (item.id && item.id !== item.name && item.id.length > 30) {
+            // Item punya UUID berbeda dari nama, tampilkan nama + UUID pendek
+            displayName = item.name + ' (' + item.id.substring(0, 8) + '...)';
+        }
+        
         html += `
         <div class="mailbox-item ${isSelected ? 'selected' : ''}" 
-             onclick="toggleMailboxItem('${esc(item.name)}', '${esc(item.category || 'Other')}', '${esc(item.id || '')}')"
+             onclick="toggleMailboxItem('${esc(item.name)}', '${esc(item.category || 'Other')}', '${esc(item.id || '')}', ${item.qty || 1})"
              style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;border-radius:6px;cursor:pointer;transition:all 0.15s;background:${isSelected ? 'rgba(34,197,94,0.15)' : 'var(--bg-input)'};border:1px solid ${isSelected ? 'var(--green)' : 'var(--border-color)'}">
             <input type="checkbox" ${isSelected ? 'checked' : ''} style="pointer-events:none">
-            <span style="font-size:12px;flex:1">${esc(item.name)}</span>
+            <span style="font-size:12px;flex:1">${esc(displayName)}</span>
             ${item.qty > 1 ? `<span style="font-size:10px;color:var(--text-muted)">x${item.qty}</span>` : ''}
-            <span style="font-size:9px;color:${hasUuid ? 'var(--green)' : 'var(--text-muted)'}">${hasUuid ? '✓ UUID' : 'no UUID'}</span>
+            <span style="font-size:9px;color:${hasUuid ? 'var(--green)' : 'var(--text-muted)'}">${hasUuid ? '✓' : ''}</span>
         </div>`;
     });
     
@@ -1977,12 +2172,12 @@ function renderMailboxInventory() {
     document.getElementById('mailboxTotalCount').textContent = `Total: ${filtered.length} items`;
 }
 
-function toggleMailboxItem(name, category, id) {
+function toggleMailboxItem(name, category, id, qty) {
     const idx = mailboxSelectedItems.findIndex(s => s.name === name);
     if (idx >= 0) {
         mailboxSelectedItems.splice(idx, 1);
     } else {
-        mailboxSelectedItems.push({ name, category, id: id || '' });
+        mailboxSelectedItems.push({ name, category, id: id || '', qty: qty || 1 });
     }
     renderMailboxInventory();
     updateMailboxPreview();
@@ -1992,7 +2187,8 @@ function selectAllMailboxItems() {
     mailboxSelectedItems = mailboxInventory.map(item => ({
         name: item.name,
         category: item.category || 'Other',
-        id: item.id || ''
+        id: item.id || '',
+        qty: item.qty || 1
     }));
     renderMailboxInventory();
     updateMailboxPreview();
@@ -2121,11 +2317,18 @@ async function sendMailboxItems() {
     // Send to each target
     for (const target of mailboxTargets) {
         try {
+            // Apply max count limit
+            const maxCount = parseInt(document.getElementById('mailboxMaxCount').value) || 0;
+            const itemsToSend = mailboxSelectedItems.map(item => ({
+                ...item,
+                qty: maxCount > 0 ? Math.min(item.qty || 1, maxCount) : (item.qty || 1)
+            }));
+            
             const resp = await api('POST', '/api/mailbox/send', {
                 account: _selectedAccount,
                 targetUsername: target,
-                items: mailboxSelectedItems,
-                batchSize: parseInt(document.getElementById('mailboxBatchSize').value) || 25
+                items: itemsToSend,
+                note: document.getElementById('mailboxNote')?.value || ''
             });
             
             if (resp.success) {
@@ -2151,7 +2354,9 @@ async function sendMailboxItems() {
                 // Poll for result
                 pollCommandResult(resp.command_id, target);
                 
-                addMailboxHistory('send', mailboxSelectedItems.length, target, 
+                // Hitung total count (quantity)
+                const totalCount = itemsToSend.reduce((sum, item) => sum + (item.qty || 1), 0);
+                addMailboxHistory('send', totalCount, target, 
                     `Command queued (${resp.items_count} items)`);
             } else {
                 allSuccess = false;
@@ -2244,11 +2449,12 @@ function renderMailboxHistory() {
     let html = '';
     mailboxHistory.forEach(h => {
         const color = h.message.includes('generated') || h.message.includes('success') ? 'var(--green)' : 'var(--text-muted)';
+        const countText = h.count > 1 ? `${h.count} items` : `${h.count} item`;
         html += `
         <div style="display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:4px;background:var(--bg-input);border-radius:6px;font-size:11px">
             <i class="fas fa-code" style="color:${color};width:16px;text-align:center"></i>
             <span style="color:var(--text-muted);min-width:60px">${h.time}</span>
-            <span style="flex:1">${h.count} items → ${esc(h.target)}</span>
+            <span style="flex:1">${countText} → ${esc(h.target)}</span>
             <span style="color:${color}">${esc(h.message)}</span>
         </div>`;
     });
@@ -2261,13 +2467,159 @@ function clearMailboxHistory() {
     renderMailboxHistory();
 }
 
+// ==================== HARVEST FRUITS ====================
+
+let harvestSelectedFruits = [];
+let harvestFruitsData = [];
+
+function renderHarvestFruitList() {
+    const listEl = document.getElementById('harvestFruitsList');
+    if (!harvestFruitsData.length) {
+        listEl.innerHTML = '<div class="empty-state"><i class="fas fa-apple-alt"></i> No harvest fruits</div>';
+        return;
+    }
+    
+    listEl.innerHTML = harvestFruitsData.map((f, i) => {
+        const mutMultiplier = f.mutation_multiplier || 1;
+        const mutLabel = f.mutation && f.mutation !== 'None' ? ` [${f.mutation}]` : '';
+        const checked = harvestSelectedFruits.some(s => s.id === f.id) ? 'checked' : '';
+        const qty = f.count || 1;
+        const displayValue = f.totalValue || (f.value * qty) || 0;
+        return `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-color);font-size:11px" onclick="toggleHarvestFruit(${i})">
+            <input type="checkbox" ${checked} style="cursor:pointer" onchange="toggleHarvestFruit(${i})">
+            <span style="flex:1">${esc(f.fruitName)}${mutLabel} ${qty > 1 ? 'x' + qty : ''} (${f.weight?.toFixed(1) || '?'}kg)</span>
+            <span style="color:var(--green)">${displayValue.toLocaleString()} <span style="color:var(--text-muted);font-size:9px">(${mutMultiplier}x)</span></span>
+        </div>`;
+    }).join('');
+    
+    updateHarvestSelectedCount();
+}
+
+function toggleHarvestFruit(index) {
+    const fruit = harvestFruitsData[index];
+    if (!fruit) return;
+    const idx = harvestSelectedFruits.findIndex(s => s.id === fruit.id);
+    if (idx >= 0) {
+        harvestSelectedFruits.splice(idx, 1);
+    } else {
+        harvestSelectedFruits.push(fruit);
+    }
+    renderHarvestFruitList();
+}
+
+function selectAllHarvestFruits() {
+    harvestSelectedFruits = harvestFruitsData.filter(f => f.id && f.id !== '');
+    renderHarvestFruitList();
+    showToast(`${harvestSelectedFruits.length} fruits selected`, 'info');
+}
+
+function clearHarvestFruits() {
+    harvestSelectedFruits = [];
+    renderHarvestFruitList();
+}
+
+function updateHarvestSelectedCount() {
+    const el = document.getElementById('harvestSelectedCount');
+    if (!el) { console.warn('harvestSelectedCount not found'); return; }
+    const totalQty = harvestSelectedFruits.reduce((s, f) => s + (f.count || 1), 0);
+    const value = harvestSelectedFruits.reduce((s, f) => s + (f.totalValue || (f.value || 0) * (f.count || 1)), 0);
+    el.textContent = `(${totalQty}) ${value.toLocaleString()}`;
+}
+
+async function loadHarvestFruits() {
+    const account = document.getElementById('mailboxAccountSelect').value;
+    if (!account) { showToast('Pilih akun dulu', 'warning'); return; }
+    
+    const btn = document.querySelector('#gift-tab-harvest .btn-primary');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+    
+    try {
+        const resp = await api('POST', '/api/mailbox/harvest-fruits', { account });
+        
+        if (resp.error) {
+            showToast(resp.error, 'warning');
+            document.getElementById('harvestFruitsResult').style.display = 'none';
+            return;
+        }
+        
+        harvestFruitsData = resp.fruits || [];
+        harvestSelectedFruits = [];
+        
+        document.getElementById('harvestFruitsResult').style.display = 'block';
+        document.getElementById('harvestTotalCount').textContent = resp.total_count + ' fruits';
+        document.getElementById('harvestTotalValue').textContent = resp.formatted_value;
+        
+        renderHarvestFruitList();
+        
+        showToast(`Found ${resp.total_count} harvest fruits worth ${resp.formatted_value}`, 'success');
+    } catch (e) {
+        showToast(`Error: ${e.message}`, 'error');
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-search"></i> Scan Harvest Fruits';
+}
+
+async function sendHarvestFruits() {
+    const account = document.getElementById('mailboxAccountSelect').value;
+    const target = mailboxTargets[0];
+    
+    if (!account) { showToast('Pilih akun dulu', 'warning'); return; }
+    if (!target) { showToast('Tambah target dulu', 'warning'); return; }
+    if (harvestSelectedFruits.length === 0) { showToast('Pilih fruits yang mau dikirim', 'warning'); return; }
+    
+    const btn = document.getElementById('btnSendHarvestFruits');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim...';
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const fruit of harvestSelectedFruits) {
+        if (!fruit.id || fruit.id === '') {
+            failCount++;
+            continue;
+        }
+        
+        try {
+            const sendResp = await api('POST', '/api/mailbox/send-gift', {
+                account,
+                targetUsername: target,
+                itemId: fruit.id,
+                note: `Harvest fruit: ${fruit.fruitName}${fruit.mutation !== 'None' ? ' [' + fruit.mutation + ']' : ''}`
+            });
+            
+            if (sendResp.success) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+        } catch (e) {
+            failCount++;
+        }
+    }
+    
+    showToast(`Selesai! ${successCount} terkirim, ${failCount} gagal`, successCount > 0 ? 'success' : 'error');
+    addMailboxHistory(successCount > 0 ? 'send' : 'failed', harvestSelectedFruits.length, target,
+        `Harvest fruits: ${successCount} ok, ${failCount} gagal`);
+    
+    // Clear sent items from selection
+    harvestSelectedFruits = [];
+    renderHarvestFruitList();
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim Selected Fruits';
+}
+
 // ==================== INIT ====================
 
-function initMailbox() {
+async function initMailbox() {
     mailboxTargets = [];
     mailboxSelectedItems = [];
     renderMailboxTargets();
-    loadMailboxAccounts();
+    await loadMailboxAccounts();
 }
 
 // Initialize when page loads

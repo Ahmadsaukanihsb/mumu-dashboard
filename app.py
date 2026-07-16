@@ -2,8 +2,8 @@ import os
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 
-from config import FLASK_SECRET, AUTH_PASSWORD_KEY, PUBLIC_ROUTES, HOST, PORT
-from models import settings, load_data
+from config import FLASK_SECRET, AUTH_PASSWORD_KEY, PUBLIC_ROUTES, HOST, PORT, IS_TERMUX
+from models import settings, load_data, discover_roblox_packages_on_start
 from monitor import start_monitor
 
 app = Flask(__name__)
@@ -49,8 +49,9 @@ def check_auth():
     # Allow public routes
     if request.path in PUBLIC_ROUTES:
         return
-    # Allow all mailbox endpoints (for monitor script and dashboard)
-    if '/api/mailbox/' in request.path:
+    # Allow specific mailbox endpoints (for monitor script polling)
+    mailbox_public = {'/api/mailbox/commands'}
+    if request.path in mailbox_public:
         return
     # Check authentication for other routes
     if not session.get('authenticated'):
@@ -60,12 +61,30 @@ def check_auth():
 
 if __name__ == '__main__':
     load_data()
-    start_monitor()
-    serials = settings.get('mumu_serials', [])
-    info = ', '.join([f'#{i}:{s or "?"}' for i, s in enumerate(serials)])
-    print(f'Dashboard Roblox running on http://localhost:{PORT}')
-    from services.adb import find_adb
-    print(f'ADB: {find_adb() or "not found"}')
-    print(f'Instances: {info}')
-    print(f'Monitor thread started (interval: {settings.get("monitor_interval", 5)}s)')
+    if IS_TERMUX:
+        serials = settings.get('mumu_serials', ['127.0.0.1:5555'])
+        if not serials or not serials[0]:
+            settings['mumu_serials'] = ['127.0.0.1:5555']
+            from models import save_data
+            save_data()
+        serial = settings['mumu_serials'][0]
+        from services.adb import find_adb, adb_connect
+        adb = find_adb()
+        print(f'Dashboard Roblox (Termux) running on http://0.0.0.0:{PORT}')
+        print(f'ADB: {adb or "not found"}')
+        print(f'Serial: {serial}')
+        if adb:
+            ok, msg = adb_connect(serial)
+            print(f'ADB Connect: {"OK" if ok else msg}')
+            discover_roblox_packages_on_start(serial)
+        start_monitor()
+    else:
+        start_monitor()
+        serials = settings.get('mumu_serials', [])
+        info = ', '.join([f'#{i}:{s or "?"}' for i, s in enumerate(serials)])
+        print(f'Dashboard Roblox running on http://localhost:{PORT}')
+        from services.adb import find_adb
+        print(f'ADB: {find_adb() or "not found"}')
+        print(f'Instances: {info}')
+        print(f'Monitor thread started (interval: {settings.get("monitor_interval", 5)}s)')
     app.run(host=HOST, port=PORT, debug=False, use_reloader=False)
