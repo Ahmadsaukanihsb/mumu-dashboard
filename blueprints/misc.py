@@ -1319,3 +1319,99 @@ def batch_auto_grid():
         'cell': {'w': cell_w, 'h': cell_h},
         'results': results
     })
+
+
+# ==================== REMOTE MONITOR API ====================
+remote_monitors = {}
+
+@misc_bp.route('/api/remote/register', methods=['POST'])
+def remote_register():
+    data = request.json or {}
+    serial = data.get('serial', '')
+    packages = data.get('packages', [])
+    if not serial or not packages:
+        return jsonify({'error': 'serial and packages required'}), 400
+    account_map = {}
+    for acc in accounts:
+        pkg = acc.get('package_name', '')
+        if pkg:
+            account_map[pkg] = acc.get('name', pkg)
+    remote_monitors[serial] = {
+        'serial': serial,
+        'packages': [p.get('name', '') for p in packages],
+        'registered_at': time.time(),
+        'last_report': 0
+    }
+    log_activity(f'Remote monitor registered: {serial} ({len(packages)} packages)')
+    return jsonify({'success': True, 'account_map': account_map, 'accounts': len(accounts)})
+
+@misc_bp.route('/api/remote/status', methods=['POST'])
+def remote_status():
+    data = request.json or {}
+    account_name = data.get('account_name', '')
+    package = data.get('package', '')
+    status = data.get('status', 'unknown')
+    tc = data.get('thread_count')
+    kicked = data.get('kicked')
+    for acc in accounts:
+        if acc.get('name') == account_name or acc.get('package_name') == package:
+            old_status = acc.get('status', '')
+            acc['status'] = status
+            if status in ('in_game', 'monitoring', 'connected', 'active'):
+                acc['active'] = True
+            elif status in ('kicked', 'disconnected', 'error'):
+                acc['active'] = False
+                if status == 'kicked' and old_status != 'kicked':
+                    send_webhook(
+                        f'⚠️ {account_name} — KICKED (Remote)',
+                        f'Package: {package}\nKicked: {kicked or "unknown"}',
+                        0xffaa00,
+                        acc.get('verified_avatar')
+                    )
+            save_data()
+            break
+    if account_name:
+        log_account(account_name, account_name, f'[Remote] {status} (tc={tc}, kicked={kicked})')
+    return jsonify({'success': True})
+
+@misc_bp.route('/api/remote/config', methods=['GET'])
+def remote_config():
+    return jsonify({
+        'monitor_interval': settings.get('monitor_interval', 5),
+        'rejoin_interval': settings.get('rejoin_interval', 2400),
+        'thread_threshold': settings.get('thread_threshold', 80),
+        'rejoin_delay': settings.get('rejoin_delay', 3),
+        'max_retries': settings.get('max_retries', 5),
+        'auto_join_enabled': settings.get('auto_join_enabled', True),
+        'current_server': servers[0] if servers else {}
+    })
+
+@misc_bp.route('/api/remote/commands', methods=['GET'])
+def remote_commands():
+    from blueprints.mailbox import mailbox_commands, command_lock
+    account = request.args.get('account', '')
+    if not account:
+        return jsonify({'commands': [], 'count': 0})
+    with command_lock:
+        pending = [cmd for cmd in mailbox_commands
+                   if cmd.get('account') == account and cmd['status'] == 'pending']
+    return jsonify({'commands': pending, 'count': len(pending)})
+
+@misc_bp.route('/api/remote/commands/<cmd_id>/complete', methods=['POST'])
+def remote_command_complete(cmd_id):
+    from blueprints.mailbox import mailbox_commands, mailbox_results, command_lock
+    data = request.json or {}
+    success = data.get('success', False)
+    message = data.get('message', '')
+    with command_lock:
+        if cmd_id in mailbox_results:
+            mailbox_results[cmd_id] = {
+                'status': 'completed' if success else 'failed',
+                'message': message,
+                'completed_at': time.time()
+            }
+        for cmd in mailbox_commands:
+            if cmd['id'] == cmd_id:
+                cmd['status'] = 'completed' if success else 'failed'
+                break
+    return jsonify({'success': True})

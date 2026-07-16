@@ -20,7 +20,7 @@ PACKAGE_MAP = {
 }
 
 AUTH_PASSWORD_KEY = 'dashboard_password'
-PUBLIC_ROUTES = {'/login', '/api/login', '/api/auth-status', '/api/auth/discord', '/api/auth/discord/callback', '/api/status', '/api/inventory', '/api/item-thumbnails', '/api/item-sell-prices', '/api/game-status', '/api/set-weather', '/static/style.css', '/static/script.js', '/static/manifest.json', '/static/service-worker.js', '/api/harvest-fruits', '/api/push-all-active'}
+PUBLIC_ROUTES = {'/login', '/api/login', '/api/auth-status', '/api/auth/discord', '/api/auth/discord/callback', '/api/status', '/api/inventory', '/api/item-thumbnails', '/api/item-sell-prices', '/api/game-status', '/api/set-weather', '/static/style.css', '/static/script.js', '/static/manifest.json', '/static/service-worker.js', '/api/harvest-fruits', '/api/push-all-active', '/api/remote/register', '/api/remote/status', '/api/remote/config', '/api/remote/commands'}
 
 FLASK_SECRET = os.environ.get('FLASK_SECRET') or secrets.token_hex(32)
 HOST = '0.0.0.0'
