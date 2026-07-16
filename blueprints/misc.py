@@ -1434,6 +1434,7 @@ def remote_status():
     status = data.get('status', 'unknown')
     tc = data.get('thread_count')
     kicked = data.get('kicked')
+    print(f'[REMOTE] {account_name} ({package}): {status} tc={tc} kicked={kicked}')
     for acc in accounts:
         if acc.get('name') == account_name or acc.get('package_name') == package:
             old_status = acc.get('status', '')

@@ -273,6 +273,7 @@ class RootMonitor:
             return
 
         self.running = True
+        self._last_rejoin = {}
         print(f'[MONITOR] Monitor started! Polling every {self.poll_interval}s...')
 
         while self.running:
@@ -280,6 +281,7 @@ class RootMonitor:
                 self.get_config()
                 rejoin_interval = self.settings.get('rejoin_interval', 2400)
                 thread_threshold = self.settings.get('thread_threshold', 80)
+                now = time.time()
 
                 for pkg in self.packages:
                     if not self.running:
@@ -290,40 +292,69 @@ class RootMonitor:
                     running = self.check_roblox(pkg)
                     if not running:
                         self.report_status(account_name, pkg, 'disconnected')
-                        print(f'[{account_name}] Not running ({pkg}), rejoining...')
+                        print(f'[{account_name}] NOT RUNNING ({pkg})')
                         link = self._get_join_link(account_name)
                         if link:
-                            print(f'[{account_name}] Join link: {link[:80]}...')
+                            print(f'[{account_name}] → JOINING: {link[:80]}...')
                             self.start_join_intent(pkg, link)
                             self.report_status(account_name, pkg, 'rejoining')
+                            self._last_rejoin[pkg] = now
                         else:
-                            print(f'[{account_name}] No join link configured!')
+                            print(f'[{account_name}] → NO JOIN LINK!')
                         continue
 
                     tc = self.get_thread_count(pkg)
                     kicked = self.detect_kicked(pkg)
 
                     if kicked:
-                        print(f'[{account_name}] Kicked ({kicked}), rejoining...')
+                        print(f'[{account_name}] KICKED ({kicked}), rejoining...')
                         self.report_status(account_name, pkg, 'kicked', tc=tc, kicked=kicked)
                         link = self._get_join_link(account_name)
                         if link:
-                            print(f'[{account_name}] Join link: {link[:80]}...')
+                            print(f'[{account_name}] → JOINING: {link[:80]}...')
                             self.start_join_intent(pkg, link)
                             self.report_status(account_name, pkg, 'rejoining')
+                            self._last_rejoin[pkg] = now
                         else:
-                            print(f'[{account_name}] No join link configured!')
+                            print(f'[{account_name}] → NO JOIN LINK!')
                         continue
 
                     if tc is not None and tc >= thread_threshold:
+                        print(f'[{account_name}] IN-GAME (tc={tc})')
                         self.report_status(account_name, pkg, 'in_game', tc=tc)
+                        self._last_rejoin[pkg] = now
                     elif tc is not None:
+                        print(f'[{account_name}] HOME SCREEN (tc={tc}), joining...')
                         self.report_status(account_name, pkg, 'monitoring', tc=tc)
-                        if tc < 10:
-                            print(f'[{account_name}] Low threads ({tc}), dismissing dialogs')
-                            self.dismiss_dialogs()
+                        last = self._last_rejoin.get(pkg, 0)
+                        if now - last >= 15:
+                            link = self._get_join_link(account_name)
+                            if link:
+                                print(f'[{account_name}] → JOINING: {link[:80]}...')
+                                self.start_join_intent(pkg, link)
+                                self.report_status(account_name, pkg, 'rejoining')
+                                self._last_rejoin[pkg] = now
+                            if tc < 10:
+                                self.dismiss_dialogs()
                     else:
+                        print(f'[{account_name}] RUNNING (tc=unknown)')
                         self.report_status(account_name, pkg, 'monitoring', tc=None)
+                        last = self._last_rejoin.get(pkg, 0)
+                        if now - last >= 60:
+                            link = self._get_join_link(account_name)
+                            if link:
+                                print(f'[{account_name}] → JOINING (fallback): {link[:80]}...')
+                                self.start_join_intent(pkg, link)
+                                self.report_status(account_name, pkg, 'rejoining')
+                                self._last_rejoin[pkg] = now
+
+                    last_rejoin = self._last_rejoin.get(pkg, 0)
+                    if rejoin_interval > 0 and (now - last_rejoin) >= rejoin_interval:
+                        print(f'[{account_name}] PERIODIC REJOIN ({int(rejoin_interval//60)} min)')
+                        link = self._get_join_link(account_name)
+                        if link:
+                            self.start_join_intent(pkg, link)
+                            self._last_rejoin[pkg] = now
 
                     self._check_mailbox_commands(account_name)
 
@@ -335,6 +366,8 @@ class RootMonitor:
                 break
             except Exception as e:
                 print(f'[MONITOR] Error: {e}')
+                import traceback
+                traceback.print_exc()
                 time.sleep(5)
 
     def _get_join_link(self, account_name=None):
