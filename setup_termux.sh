@@ -25,8 +25,8 @@ if [ -z "$TERMUX_VERSION" ] && [ ! -d "/data/data/com.termux" ]; then
 fi
 
 # GitHub repo URL (UPDATE INI setelah push ke GitHub!)
-REPO_URL="${REPO_URL:-https://github.com/USERNAME/Dashboard-Roblox}"
-BRANCH="${BRANCH:-main}"
+REPO_URL="${REPO_URL:-https://github.com/Ahmadsaukanihsb/mumu-dashboard.git}"
+BRANCH="${BRANCH:-master}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/dashboard-roblox}"
 
 echo "[1/7] Updating packages..."
