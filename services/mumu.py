@@ -100,7 +100,6 @@ def ensure_vm_running(serial, instance):
     return False
 
 def send_join_intent(acc, serial):
-    package = acc.get('package_name', get_package_name(acc.get('mumu_instance', 0)))
     sv = next((s for s in servers if s['id'] == acc.get('server_id')), None)
     if not sv and servers:
         sv = servers[0]
@@ -109,9 +108,9 @@ def send_join_intent(acc, serial):
     link = build_join_link(sv)
     if not link:
         return False
-    adb_force_stop_roblox(serial, package)
+    adb_force_stop_roblox(serial)
     time.sleep(3)
-    code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'", '-p', package], serial)
+    code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'"], serial)
     if code != 0:
         return False
     for attempt in range(3):
@@ -174,7 +173,6 @@ def _launch_mumu(acc, link, sv):
     delay = settings.get('rejoin_delay', 3)
     instance = acc.get('mumu_instance', 0)
     serial = get_serial(instance)
-    package = acc.get('package_name', get_package_name(instance))
     if not serial:
         log_account(acc['id'], acc['name'], f'Instance {instance}: serial kosong', 'error')
         acc['status'] = 'error'
@@ -193,17 +191,17 @@ def _launch_mumu(acc, link, sv):
             if attempt > 0:
                 time.sleep(delay)
             url = build_join_link(sv)
-            adb_force_stop_roblox(serial, package)
+            adb_force_stop_roblox(serial)
             time.sleep(3)
-            code, out = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{url}'", '-p', package], serial)
+            code, out = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{url}'"], serial)
             for _ in range(12):
-                if adb_check_roblox(serial, package):
+                if adb_check_roblox(serial):
                     break
                 time.sleep(2)
             adb_dismiss_dialogs(serial)
             if code != 0 and code is not None:
                 log_account(acc['id'], acc['name'], f'ADB: {out}', 'warning')
-            if not adb_check_roblox(serial, package):
+            if not adb_check_roblox(serial):
                 log_account(acc['id'], acc['name'], 'Roblox tidak terdeteksi setelah intent, retry...')
                 continue
             acc['status'] = 'connected'
