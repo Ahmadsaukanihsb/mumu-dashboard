@@ -1467,6 +1467,13 @@ def remote_status():
 
 @misc_bp.route('/api/remote/config', methods=['GET'])
 def remote_config():
+    account_settings = {}
+    for acc in accounts:
+        pkg = acc.get('package_name', '')
+        if pkg:
+            account_settings[pkg] = {
+                'auto_join': acc.get('auto_join', False)
+            }
     return jsonify({
         'monitor_interval': settings.get('monitor_interval', 5),
         'rejoin_interval': settings.get('rejoin_interval', 2400),
@@ -1475,7 +1482,8 @@ def remote_config():
         'max_retries': settings.get('max_retries', 5),
         'auto_join_enabled': settings.get('auto_join_enabled', True),
         'current_server': servers[0] if servers else {},
-        'servers': [{'id': s.get('id'), 'name': s.get('name'), 'place_id': s.get('place_id'), 'type': s.get('type'), 'server_code': s.get('server_code', ''), 'link': s.get('link', '')} for s in servers]
+        'servers': [{'id': s.get('id'), 'name': s.get('name'), 'place_id': s.get('place_id'), 'type': s.get('type'), 'server_code': s.get('server_code', ''), 'link': s.get('link', '')} for s in servers],
+        'account_settings': account_settings
     })
 
 @misc_bp.route('/api/remote/commands', methods=['GET'])

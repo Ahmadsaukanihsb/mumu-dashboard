@@ -297,6 +297,8 @@ class RootMonitor:
                 self.get_config()
                 rejoin_interval = self.settings.get('rejoin_interval', 2400)
                 thread_threshold = self.settings.get('thread_threshold', 80)
+                auto_join_global = self.settings.get('auto_join_enabled', True)
+                account_settings = self.settings.get('account_settings', {})
                 now = time.time()
 
                 for pkg in self.packages:
@@ -304,6 +306,11 @@ class RootMonitor:
                         break
 
                     account_name = self.account_map.get(pkg, f'Unknown-{pkg}')
+                    auto_join_acc = account_settings.get(pkg, {}).get('auto_join', True)
+
+                    if not auto_join_global or not auto_join_acc:
+                        self.report_status(account_name, pkg, 'paused')
+                        continue
 
                     running = self.check_roblox(pkg)
                     if not running:
