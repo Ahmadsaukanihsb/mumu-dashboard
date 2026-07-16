@@ -117,7 +117,7 @@ def send_join_intent(acc, serial):
         got_valid = False
         for _ in range(4):
             time.sleep(5)
-            failed = adb_check_join_failed(serial, package)
+            failed = adb_check_join_failed(serial)
             if failed is True:
                 log_account(acc.get('id', ''), acc.get('name', '?'), f'join failed (kick/disconnect detected via ui dump), retry #{attempt+1}')
                 adb_dismiss_dialogs(serial)
@@ -207,7 +207,7 @@ def _launch_mumu(acc, link, sv):
             acc['status'] = 'connected'
             acc['last_joined'] = time.strftime('%H:%M:%S')
             acc['last_join_time'] = time.time()
-            log_account(acc['id'], acc['name'], f'Join via {serial} ({package}) berhasil')
+            log_account(acc['id'], acc['name'], f'Join via {serial} berhasil')
             save_data()
             if settings.get('delta_auto_key', False):
                 time.sleep(5)
