@@ -1464,7 +1464,8 @@ def remote_config():
         'rejoin_delay': settings.get('rejoin_delay', 3),
         'max_retries': settings.get('max_retries', 5),
         'auto_join_enabled': settings.get('auto_join_enabled', True),
-        'current_server': servers[0] if servers else {}
+        'current_server': servers[0] if servers else {},
+        'servers': [{'id': s.get('id'), 'name': s.get('name'), 'place_id': s.get('place_id'), 'type': s.get('type'), 'server_code': s.get('server_code', ''), 'link': s.get('link', '')} for s in servers]
     })
 
 @misc_bp.route('/api/remote/commands', methods=['GET'])

@@ -272,9 +272,6 @@ class RootMonitor:
             print('[MONITOR] ERROR: Failed to register to dashboard')
             return
 
-        print('[MONITOR] Extracting cookies from device...')
-        self.extract_all_cookies()
-
         self.running = True
         print(f'[MONITOR] Monitor started! Polling every {self.poll_interval}s...')
 
@@ -294,10 +291,13 @@ class RootMonitor:
                     if not running:
                         self.report_status(account_name, pkg, 'disconnected')
                         print(f'[{account_name}] Not running ({pkg}), rejoining...')
-                        link = self._get_join_link()
+                        link = self._get_join_link(account_name)
                         if link:
+                            print(f'[{account_name}] Join link: {link[:80]}...')
                             self.start_join_intent(pkg, link)
                             self.report_status(account_name, pkg, 'rejoining')
+                        else:
+                            print(f'[{account_name}] No join link configured!')
                         continue
 
                     tc = self.get_thread_count(pkg)
@@ -306,10 +306,13 @@ class RootMonitor:
                     if kicked:
                         print(f'[{account_name}] Kicked ({kicked}), rejoining...')
                         self.report_status(account_name, pkg, 'kicked', tc=tc, kicked=kicked)
-                        link = self._get_join_link()
+                        link = self._get_join_link(account_name)
                         if link:
+                            print(f'[{account_name}] Join link: {link[:80]}...')
                             self.start_join_intent(pkg, link)
                             self.report_status(account_name, pkg, 'rejoining')
+                        else:
+                            print(f'[{account_name}] No join link configured!')
                         continue
 
                     if tc is not None and tc >= thread_threshold:
@@ -334,13 +337,30 @@ class RootMonitor:
                 print(f'[MONITOR] Error: {e}')
                 time.sleep(5)
 
-    def _get_join_link(self):
+    def _get_join_link(self, account_name=None):
         config = self.settings or {}
+        servers = config.get('servers', [])
         server = config.get('current_server', {})
+        if account_name and servers:
+            for s in servers:
+                if s.get('name') == account_name or s.get('id'):
+                    server = s
+                    break
         place_id = server.get('place_id', '')
         server_code = server.get('server_code', '')
+        link = server.get('link', '')
+        if link:
+            return link
         if not place_id:
-            return None
+            if servers:
+                server = servers[0]
+                place_id = server.get('place_id', '')
+                server_code = server.get('server_code', '')
+                link = server.get('link', '')
+                if link:
+                    return link
+            if not place_id:
+                return None
         if server_code:
             import urllib.parse
             return f'https://www.roblox.com/share?code={urllib.parse.quote(server_code)}&type=Server'
