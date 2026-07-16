@@ -1049,6 +1049,7 @@ function showAddAccount() {
     document.getElementById('accName').value = '';
     document.getElementById('accCookie').value = '';
     document.getElementById('accInstance').value = '0';
+    document.getElementById('accPackage').value = '';
     openModal('accountModal');
     updateAccountSelect();
 }
@@ -1077,7 +1078,8 @@ async function saveAccount() {
     if (!name) { showToast('Nama account harus diisi', 'warning'); return; }
 
     const mumu_instance = parseInt(document.getElementById('accInstance').value) || 0;
-    const data = { name, cookie, server_id, server_ids, mumu_instance };
+    const package_name = document.getElementById('accPackage').value.trim();
+    const data = { name, cookie, server_id, server_ids, mumu_instance, package_name };
 
     if (id) {
         await api('PUT', `/api/accounts/${id}`, data);
@@ -1096,6 +1098,7 @@ async function editAccount(id) {
     document.getElementById('accName').value = acc.name;
     document.getElementById('accCookie').value = acc.cookie || '';
     document.getElementById('accInstance').value = (acc.mumu_instance != null) ? acc.mumu_instance : 0;
+    document.getElementById('accPackage').value = acc.package_name || '';
     openModal('accountModal');
     updateAccountSelect();
 }

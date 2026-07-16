@@ -114,6 +114,8 @@ def update_account(acc_id):
         if not acc['server_ids'] and acc['server_id']:
             acc['server_ids'] = [acc['server_id']]
         acc['mumu_instance'] = data.get('mumu_instance', acc.get('mumu_instance', 0))
+        if 'package_name' in data:
+            acc['package_name'] = data['package_name']
         aj = data.get('auto_join')
         if aj is not None:
             acc['auto_join'] = aj
