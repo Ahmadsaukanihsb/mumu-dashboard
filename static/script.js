@@ -116,7 +116,7 @@ function switchPage(page) {
         scripts: { title: 'Scripts', icon: 'code' },
         logs: { title: 'Logs', icon: 'clipboard-list' },
         inventory: { title: 'Inventory', icon: 'box-open' },
-        mailbox: { title: 'Mailbox', icon: 'envelope' }
+        command: { title: 'Command', icon: 'terminal' }
     };
     const meta = pageMeta[page] || { title: 'Dashboard', icon: 'chart-pie' };
     document.getElementById('pageTitle').textContent = meta.title;
@@ -126,7 +126,7 @@ function switchPage(page) {
     if (page === 'scripts') loadScript();
     if (page === 'vms') { refreshMuMuVMs(); }
     if (page === 'inventory') { refreshInventory(); }
-    if (page === 'mailbox') { initMailbox(); }
+    if (page === 'command') { initMailbox(); }
     if (page === 'logs') {
         populateLogAccountSelect();
         const sel = document.getElementById('logAccountSelect');
