@@ -15,7 +15,7 @@ from services.webhook import send_webhook
 from config import JOIN_COOLDOWN
 
 def should_join(st):
-    return time.time() - st.get('last_intent', 0) >= JOIN_COOLDOWN
+    return time.time() - st.get('last_intent', 0) >= 60
 
 def monitor_loop():
     while _models.monitor_running:
@@ -56,7 +56,8 @@ def monitor_loop():
                         acc['status'] = 'monitoring'
                         acc['active'] = True
                         st = monitor_state.setdefault(acc_id, {})
-                        st['last_intent'] = time.time()
+                        if 'last_intent' not in st:
+                            st['last_intent'] = time.time()
                         st['in_game'] = False
                         st['tc_history'] = []
                     save_data()
@@ -65,8 +66,8 @@ def monitor_loop():
                     st = monitor_state.setdefault(acc_id, {})
                     last_intent = st.get('last_intent', 0)
                     now = time.time()
-                    if now - last_intent < 45:
-                        debug(acc.get("name","?"), f'cooldown ({int(45 - (now - last_intent))}s left), skipping')
+                    if now - last_intent < 60:
+                        debug(acc.get("name","?"), f'cooldown ({int(60 - (now - last_intent))}s left), skipping')
                         continue
                     debug(acc.get("name","?"), f'rejoin trigger (status={cur_status})')
                     with _data_lock:
