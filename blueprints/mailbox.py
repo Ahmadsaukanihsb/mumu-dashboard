@@ -15,14 +15,18 @@ def lookup_user_id(username):
     """Lookup Roblox User ID from username using urllib"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
     }
     
-    # Method 1: users.roblox.com API
+    # Method 1: POST username lookup (most reliable)
     try:
+        body = json.dumps({"usernames": [username], "excludeBannedUsers": False}).encode()
         req = urllib.request.Request(
-            f'https://users.roblox.com/v1/users/search?keyword={username}&limit=10',
-            headers=headers
+            'https://users.roblox.com/v1/usernames/users',
+            data=body,
+            headers=headers,
+            method='POST'
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
@@ -32,16 +36,17 @@ def lookup_user_id(username):
     except Exception as e:
         print(f"[Mailbox] Lookup method 1 failed: {e}")
     
-    # Method 2: api.roblox.com API
+    # Method 2: Search API (fallback)
     try:
         req = urllib.request.Request(
-            f'https://api.roblox.com/users/get-by-username?username={username}',
-            headers=headers
+            f'https://users.roblox.com/v1/users/search?keyword={username}&limit=10',
+            headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
-            if data.get('Id'):
-                return data['Id']
+            for user in data.get('data', []):
+                if user.get('name', '').lower() == username.lower():
+                    return user.get('id', 0)
     except Exception as e:
         print(f"[Mailbox] Lookup method 2 failed: {e}")
     
