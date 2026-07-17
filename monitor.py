@@ -34,7 +34,7 @@ def monitor_loop():
                     debug(acc.get("name","?"), 'remote account, skipping (managed by Termux)')
                     continue
                 instance = acc.get('mumu_instance', 0)
-                package = acc.get('package_name', get_package_name(instance))
+                package = acc.get('package_name', '') or 'com.roblox.client'
                 serial = get_serial(instance)
                 if not serial:
                     debug(acc.get("name","?"), 'serial None (instance={})'.format(instance))
@@ -62,6 +62,12 @@ def monitor_loop():
                     save_data()
 
                 if not running and (was_active or cur_status in ('idle', 'error', 'disconnected')):
+                    st = monitor_state.setdefault(acc_id, {})
+                    last_intent = st.get('last_intent', 0)
+                    now = time.time()
+                    if now - last_intent < 30:
+                        debug(acc.get("name","?"), f'cooldown ({int(30 - (now - last_intent))}s left), skipping')
+                        continue
                     debug(acc.get("name","?"), f'rejoin trigger (status={cur_status})')
                     with _data_lock:
                         acc['status'] = 'disconnected'

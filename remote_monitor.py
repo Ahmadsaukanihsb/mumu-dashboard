@@ -314,6 +314,11 @@ class RootMonitor:
 
                     running = self.check_roblox(pkg)
                     if not running:
+                        last = self._last_rejoin.get(pkg, 0)
+                        if now - last < 30:
+                            print(f'[{account_name}] COOLDOWN ({int(30 - (now - last))}s left), skipping')
+                            self.report_status(account_name, pkg, 'cooldown')
+                            continue
                         self.report_status(account_name, pkg, 'disconnected')
                         print(f'[{account_name}] NOT RUNNING ({pkg})')
                         link = self._get_join_link(account_name)
