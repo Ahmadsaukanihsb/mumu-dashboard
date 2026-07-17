@@ -42,7 +42,8 @@ def build_join_link(sv):
     if sv.get('type') == 'private':
         code = sv.get('server_code', '')
         if code:
-            return f'roblox://placeId={base}&privateServerLinkCode={code}'
+            import urllib.parse
+            return f'https://www.roblox.com/share?code={urllib.parse.quote(code)}&type=Server'
     return f'roblox://placeId={base}'
 
 def _adb_extract_cookie(serial):
