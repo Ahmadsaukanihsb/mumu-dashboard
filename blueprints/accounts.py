@@ -161,7 +161,7 @@ def verify_account(acc_id):
 def verify_all_accounts():
     results = []
     for acc in accounts:
-        cookie = acc.get('cookie', '')
+        cookie = decrypt_cookie(acc.get('cookie', ''))
         if not cookie:
             results.append({'id': acc['id'], 'name': acc['name'], 'valid': False, 'error': 'No cookie'})
             continue
@@ -353,11 +353,11 @@ def inject_account(acc_id):
     acc = next((a for a in accounts if a['id'] == acc_id), None)
     if not acc:
         return jsonify({'error': 'Account not found'}), 404
-    cookie = acc.get('cookie', '')
+    cookie = decrypt_cookie(acc.get('cookie', ''))
     if not cookie:
         return jsonify({'success': False, 'error': 'No cookie'})
     instance = acc.get('mumu_instance', 0)
-    package = acc.get('package_name', get_package_name(instance))
+    package = acc.get('package_name', '') or 'com.roblox.client'
     serial = get_serial(instance)
     if not serial:
         return jsonify({'success': False, 'error': f'Instance {instance}: serial kosong'})

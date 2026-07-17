@@ -2,7 +2,7 @@ import re, os, json, time, uuid, urllib.request, urllib.parse
 
 from flask import Blueprint, render_template, request, jsonify
 
-from models import accounts, servers, settings, activity_log, acc_logs, inventory_data, harvested_fruits_data, _data_lock, monitor_state, log_activity, log_account, save_data
+from models import accounts, servers, settings, activity_log, acc_logs, inventory_data, harvested_fruits_data, _data_lock, monitor_state, log_activity, log_account, save_data, get_package_name
 from services.adb import find_adb, get_serial, adb_connect, adb_cmd, adb_force_stop_roblox, adb_check_join_failed, adb_dismiss_dialogs, adb_screenshot
 from services.mumu import mumu_vm_cmd, load_vm_display_names, find_mumu_vmm, find_mumu_vms_dir, ensure_vm_running, launch_mumu
 from services.roblox import verify_cookie, build_join_link
@@ -206,11 +206,6 @@ def receive_status():
                         0xff4444 if status == 'error' else 0xffaa00,
                         acc.get('verified_avatar')
                     )
-                    
-                    # Auto-rejoin jika enabled
-                    if settings.get('auto_join_enabled', True) and status == 'kicked':
-                        import threading
-                        threading.Thread(target=_auto_rejoin, args=(acc, msg), daemon=True).start()
                         
             save_data()
             break
