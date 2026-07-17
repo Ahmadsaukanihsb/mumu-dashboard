@@ -2682,6 +2682,131 @@ async function initMailbox() {
     await loadMailboxAccounts();
 }
 
+// ==================== SEED SHOP FUNCTIONS ====================
+
+let seedShopConfig = {};
+let seedShopSeeds = [];
+
+function switchMailboxTab(tab) {
+    document.querySelectorAll('.mailbox-tab').forEach(t => {
+        t.classList.remove('active');
+        t.classList.add('btn-secondary');
+        t.classList.remove('btn-primary');
+    });
+    document.querySelectorAll('.mailbox-content').forEach(c => c.style.display = 'none');
+    
+    const activeTab = document.querySelector(`.mailbox-tab[data-tab="${tab}"]`);
+    if (activeTab) {
+        activeTab.classList.add('active');
+        activeTab.classList.remove('btn-secondary');
+        activeTab.classList.add('btn-primary');
+    }
+    
+    const content = document.getElementById(`mailbox-${tab}`);
+    if (content) content.style.display = 'block';
+    
+    if (tab === 'seedshop') {
+        loadSeedShopConfig();
+    }
+}
+
+async function loadSeedShopConfig() {
+    try {
+        const resp = await api('GET', '/api/seed-shop/config');
+        if (resp) {
+            seedShopConfig = resp.config || {};
+            await loadSeedList();
+        }
+    } catch (e) {
+        console.error('Failed to load seed shop config:', e);
+    }
+}
+
+async function loadSeedList() {
+    try {
+        const resp = await api('GET', '/api/seed-shop/seeds');
+        if (resp && resp.seeds) {
+            seedShopSeeds = resp.seeds;
+            renderSeedShopList();
+        }
+    } catch (e) {
+        console.error('Failed to load seed list:', e);
+    }
+}
+
+function renderSeedShopList() {
+    const container = document.getElementById('seedShopList');
+    if (!container) return;
+    
+    if (seedShopSeeds.length === 0) {
+        container.innerHTML = '<div class="empty-state">Tidak ada seeds tersedia</div>';
+        return;
+    }
+    
+    container.innerHTML = seedShopSeeds.map(seed => {
+        const enabled = seedShopConfig[seed.id]?.enabled || false;
+        const maxQty = seedShopConfig[seed.id]?.max_qty || 10;
+        const rarityColors = {
+            'Common': 'var(--text-muted)',
+            'Uncommon': 'var(--green)',
+            'Rare': 'var(--blue)',
+            'Epic': 'var(--purple)',
+            'Legendary': 'var(--yellow)',
+            'Mythic': 'var(--red)'
+        };
+        const color = rarityColors[seed.rarity] || 'var(--text-muted)';
+        
+        return `
+        <div style="padding:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <div>
+                    <span style="font-weight:600;font-size:13px">${esc(seed.name)}</span>
+                    <span style="font-size:10px;color:${color};margin-left:6px">${seed.rarity}</span>
+                </div>
+                <label class="toggle" style="margin:0">
+                    <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleSeedConfig('${seed.id}', this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text-muted)">
+                <span>Price: ${seed.price}</span>
+                <span>|</span>
+                <span>Max Qty:</span>
+                <input type="number" class="input" value="${maxQty}" min="1" max="100" 
+                    style="width:60px;padding:2px 6px;font-size:11px" 
+                    onchange="updateSeedMaxQty('${seed.id}', this.value)">
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleSeedConfig(seedId, enabled) {
+    if (!seedShopConfig[seedId]) {
+        seedShopConfig[seedId] = {};
+    }
+    seedShopConfig[seedId].enabled = enabled;
+}
+
+function updateSeedMaxQty(seedId, value) {
+    if (!seedShopConfig[seedId]) {
+        seedShopConfig[seedId] = {};
+    }
+    seedShopConfig[seedId].max_qty = parseInt(value) || 10;
+}
+
+async function saveSeedShopConfig() {
+    try {
+        const resp = await api('POST', '/api/seed-shop/config', seedShopConfig);
+        if (resp && resp.success) {
+            showToast('Seed shop config saved!', 'success');
+        } else {
+            showToast('Failed to save config', 'error');
+        }
+    } catch (e) {
+        showToast('Error saving config', 'error');
+    }
+}
+
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initMailbox, 1000);
