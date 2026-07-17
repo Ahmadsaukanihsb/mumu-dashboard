@@ -8,7 +8,7 @@ def debug(*args):
     sys.stderr.flush()
 
 from models import accounts, servers, settings, monitor_state, _data_lock, _join_threads, _join_threads_lock, _join_timestamps, user_shutdown_instances, log_account, log_activity, save_data, get_package_name
-from services.adb import get_serial, adb_connect, adb_check_roblox, adb_get_thread_count, adb_dismiss_dialogs, adb_check_in_game, adb_detect_kicked_dialog, adb_force_stop_roblox
+from services.adb import get_serial, adb_connect, adb_check_roblox, adb_get_thread_count, adb_dismiss_dialogs, adb_check_in_game, adb_detect_kicked_dialog, adb_force_stop_roblox, adb_check_in_foreground, adb_check_network_active
 from services.mumu import ensure_vm_running, launch_mumu, send_join_intent
 from services.roblox import verify_cookie, build_join_link
 from services.webhook import send_webhook
@@ -108,19 +108,26 @@ def monitor_loop():
                         st = monitor_state.setdefault(acc_id, {})
                         was_in_game = st.get('in_game', True)
                     tc = adb_get_thread_count(serial, package)
+                    foreground = adb_check_in_foreground(serial, package)
+                    network = adb_check_network_active(serial, package)
 
                     if tc is not None:
                         with _data_lock:
                             st['last_tc'] = tc
                         threshold = settings.get('thread_threshold', 80)
-                        in_game = tc >= threshold
+                        in_game = tc >= threshold and foreground
                         game_start = st.get('in_game_since', 0)
                         if in_game and game_start == 0:
                             st['in_game_since'] = now
                         elif not in_game:
                             st['in_game_since'] = 0
 
-                        if not in_game and (now - st.get('last_dismiss_check', 0)) >= 30:
+                        last_intent = st.get('last_intent', 0)
+                        if now - last_intent < 60:
+                            debug(acc.get("name","?"), f'loading (tc={tc}, fg={foreground}), waiting...')
+                            continue
+
+                        if not in_game and foreground and tc < threshold and (now - st.get('last_dismiss_check', 0)) >= 30:
                             st['last_dismiss_check'] = now
                             adb_dismiss_dialogs(serial)
 
@@ -152,7 +159,6 @@ def monitor_loop():
                             in_game_since = st.get('in_game_since', 0)
                             if st['drop_count'] >= 3 and in_game_since > 0 and (now - in_game_since) >= 30:
                                 log_account(acc_id, acc['name'], f'thread drop detected [tc={tc}, drop_count={st["drop_count"]}], rejoining...')
-                                adb_force_stop_roblox(serial, package)
                                 send_join_intent(acc, serial)
                                 st['last_intent'] = time.time()
                                 st['in_game'] = False
@@ -165,13 +171,13 @@ def monitor_loop():
                         if in_game:
                             if not was_in_game and not st.get('in_game_notified', False):
                                 st['in_game_notified'] = True
-                                log_account(acc_id, acc['name'], f'in-game detected ({package})')
-                                send_webhook(f'✅ {acc["name"]} — In Game', f'Account berhasil masuk ke game\n**Package:** {package}', 0x43e97b, acc.get('verified_avatar'))
+                                log_account(acc_id, acc['name'], f'in-game detected (tc={tc}, fg={foreground}, net={network})')
+                                send_webhook(f'✅ {acc["name"]} — In Game', f'Account berhasil masuk ke game\n**Package:** {package}\n**TC:** {tc}', 0x43e97b, acc.get('verified_avatar'))
                             st['in_game'] = True
                         elif was_in_game:
                             st['in_game_notified'] = False
                             if should_join(st):
-                                log_account(acc_id, acc['name'], f'home screen (threads={tc}), rejoining...')
+                                log_account(acc_id, acc['name'], f'home screen (threads={tc}, fg={foreground}), rejoining...')
                                 send_join_intent(acc, serial)
                                 st['last_intent'] = time.time()
                             st['in_game'] = False

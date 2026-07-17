@@ -112,54 +112,22 @@ def send_join_intent(acc, serial):
     link = build_join_link(sv)
     if not link:
         return False
-    adb_force_stop_roblox(serial)
-    time.sleep(3)
+    log_account(acc.get('id', ''), acc.get('name', '?'), f'Opening: {link[:80]}')
     code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'"], serial)
     if code != 0:
+        log_account(acc.get('id', ''), acc.get('name', '?'), f'am start failed (code={code})')
         return False
-    for attempt in range(3):
-        got_valid = False
-        for _ in range(4):
-            time.sleep(5)
-            failed = adb_check_join_failed(serial)
-            if failed is True:
-                log_account(acc.get('id', ''), acc.get('name', '?'), f'join failed (kick/disconnect detected via ui dump), retry #{attempt+1}')
-                adb_dismiss_dialogs(serial)
-                time.sleep(2)
-                break
-            elif failed is False:
-                got_valid = True
-                continue
-            else:
-                continue
-        else:
-            if not got_valid:
-                log_account(acc.get('id', ''), acc.get('name', '?'), f'join: all ADB checks failed (no valid reading), retry #{attempt+1}')
-                adb_dismiss_dialogs(serial)
-                time.sleep(2)
-                if attempt < 2:
-                    adb_force_stop_roblox(serial)
-                    time.sleep(3)
-                    code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'"], serial)
-                    if code != 0:
-                        return False
-                continue
-            adb_dismiss_dialogs(serial)
-            time.sleep(2)
-            adb_dismiss_dialogs(serial)
-            now = time.time()
-            acc['last_join_time'] = now
+    for check in range(12):
+        time.sleep(5)
+        if adb_check_roblox(serial):
+            log_account(acc.get('id', ''), acc.get('name', '?'), f'Roblox detected after {(check+1)*5}s')
+            time.sleep(10)
+            acc['last_join_time'] = time.time()
             acc['status'] = 'connected'
             acc['last_joined'] = time.strftime('%H:%M:%S')
             save_data()
             return True
-        if attempt < 2:
-            adb_force_stop_roblox(serial)
-            time.sleep(3)
-            code, _ = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'"], serial)
-            if code != 0:
-                return False
-    log_account(acc.get('id', ''), acc.get('name', '?'), 'join failed after 3 retries')
+    log_account(acc.get('id', ''), acc.get('name', '?'), 'Roblox not detected after 60s')
     return False
 
 def launch_mumu(acc, link, sv, acc_id=None):

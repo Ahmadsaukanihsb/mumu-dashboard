@@ -334,6 +334,12 @@ class RootMonitor:
                     tc = self.get_thread_count(pkg)
                     kicked = self.detect_kicked(pkg)
 
+                    last = self._last_rejoin.get(pkg, 0)
+                    if now - last < 60 and tc is not None and tc < thread_threshold:
+                        print(f'[{account_name}] LOADING (tc={tc}), waiting...')
+                        self.report_status(account_name, pkg, 'loading', tc=tc)
+                        continue
+
                     if kicked:
                         print(f'[{account_name}] KICKED ({kicked}), rejoining...')
                         self.report_status(account_name, pkg, 'kicked', tc=tc, kicked=kicked)
@@ -352,10 +358,10 @@ class RootMonitor:
                         self.report_status(account_name, pkg, 'in_game', tc=tc)
                         self._last_rejoin[pkg] = now
                     elif tc is not None:
-                        print(f'[{account_name}] HOME SCREEN (tc={tc}), joining...')
+                        print(f'[{account_name}] HOME SCREEN (tc={tc})')
                         self.report_status(account_name, pkg, 'monitoring', tc=tc)
                         last = self._last_rejoin.get(pkg, 0)
-                        if now - last >= 15:
+                        if now - last >= 60:
                             link = self._get_join_link(account_name)
                             if link:
                                 print(f'[{account_name}] → JOINING: {link[:80]}...')

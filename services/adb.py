@@ -283,6 +283,35 @@ def adb_check_join_failed(serial, package='com.roblox.client'):
     except:
         return None
 
+def adb_get_pid(serial, package='com.roblox.client'):
+    code, out = adb_cmd(['shell', 'pidof', package], serial)
+    if code == 0 and out:
+        pid = out.split()[0]
+        if pid.isdigit():
+            return pid
+    return None
+
+def adb_check_in_foreground(serial, package='com.roblox.client'):
+    code, out = adb_cmd(['shell', 'dumpsys', 'activity', 'activities'], serial)
+    if code == 0 and out:
+        if 'mResumedActivity' in out and package in out:
+            return True
+        lines = out.split('\n')
+        for line in lines:
+            if 'mResumedActivity' in line and package in line:
+                return True
+    return False
+
+def adb_check_network_active(serial, package='com.roblox.client'):
+    pid = adb_get_pid(serial, package)
+    if not pid:
+        return False
+    code, out = adb_cmd(['shell', 'cat', f'/proc/{pid}/net/tcp'], serial)
+    if code == 0 and out:
+        established = [l for l in out.split('\n') if ' 0A ' in l]
+        return len(established) > 2
+    return False
+
 def auto_push_script_to_vm(acc, serial):
     from blueprints.misc import make_script_for
     from models import settings, log_account as _log_account, get_package_name
