@@ -521,7 +521,7 @@ def push_script(acc_id):
     if not acc:
         return jsonify({'error': 'Account not found'}), 404
     name = acc.get('name', 'Account')
-    package = acc.get('package_name', get_package_name(acc.get('mumu_instance', 0)))
+    package = acc.get('package_name', '')
     url = settings.get('dashboard_url', 'http://localhost:5000')
     from blueprints.misc import make_script_for
     script = make_script_for(name, url)
@@ -538,13 +538,18 @@ def push_script(acc_id):
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(script)
-        script_path = f'/data/data/{package}/files/Delta/Autoexecute/monitor.luau'
+        if package:
+            script_path = f'/data/data/{package}/files/Delta/Autoexecute/monitor.luau'
+            target = package
+        else:
+            script_path = '/sdcard/Delta/Autoexecute/monitor.luau'
+            target = 'sdcard'
         code, out = adb_cmd(['push', tmp, script_path], serial)
         if code != 0:
             return jsonify({'error': f'ADB push failed: {out}'}), 500
         if acc:
-            log_account(acc_id, name, f'Script pushed to {package} Autoexecute')
-        return jsonify({'success': True, 'message': f'Script pushed to {package} on VM'})
+            log_account(acc_id, name, f'Script pushed to {target} OK')
+        return jsonify({'success': True, 'message': f'Script pushed to {target}'})
     finally:
         try: os.remove(tmp)
         except: pass

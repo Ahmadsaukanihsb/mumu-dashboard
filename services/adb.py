@@ -314,9 +314,9 @@ def adb_check_network_active(serial, package='com.roblox.client'):
 
 def auto_push_script_to_vm(acc, serial):
     from blueprints.misc import make_script_for
-    from models import settings, log_account as _log_account, get_package_name
+    from models import settings, log_account as _log_account
     name = acc.get('name', 'Account')
-    package = acc.get('package_name', get_package_name(acc.get('mumu_instance', 0)))
+    package = acc.get('package_name', '')
     url = settings.get('dashboard_url', 'http://localhost:5000')
     script = make_script_for(name, url)
     import tempfile, os
@@ -324,10 +324,14 @@ def auto_push_script_to_vm(acc, serial):
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(script)
-        script_path = f'/data/data/{package}/files/Delta/Autoexecute/monitor.luau'
+        if package:
+            script_path = f'/data/data/{package}/files/Delta/Autoexecute/monitor.luau'
+        else:
+            script_path = '/sdcard/Delta/Autoexecute/monitor.luau'
         code, out = adb_cmd(['push', tmp, script_path], serial)
         if code == 0:
-            _log_account(acc.get('id', ''), name, f'Script auto-push ke {package} Autoexecute')
+            target = package if package else 'sdcard'
+            _log_account(acc.get('id', ''), name, f'Script push ke {target} OK')
             return True, 'OK'
         return False, out
     except Exception as e:
