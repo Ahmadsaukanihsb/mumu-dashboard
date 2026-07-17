@@ -65,15 +65,14 @@ def monitor_loop():
                     st = monitor_state.setdefault(acc_id, {})
                     last_intent = st.get('last_intent', 0)
                     now = time.time()
-                    if now - last_intent < 30:
-                        debug(acc.get("name","?"), f'cooldown ({int(30 - (now - last_intent))}s left), skipping')
+                    if now - last_intent < 45:
+                        debug(acc.get("name","?"), f'cooldown ({int(45 - (now - last_intent))}s left), skipping')
                         continue
                     debug(acc.get("name","?"), f'rejoin trigger (status={cur_status})')
                     with _data_lock:
                         acc['status'] = 'disconnected'
                         acc['active'] = False
-                        st = monitor_state.setdefault(acc_id, {})
-                        st['last_intent'] = time.time()
+                        st['last_intent'] = now
                         st['in_game'] = False
                     if was_active:
                         log_account(acc_id, acc['name'], 'Roblox exited, rejoining...')
