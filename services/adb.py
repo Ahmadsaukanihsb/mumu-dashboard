@@ -294,12 +294,12 @@ def adb_get_pid(serial, package='com.roblox.client'):
 def adb_check_in_foreground(serial, package='com.roblox.client'):
     code, out = adb_cmd(['shell', 'dumpsys', 'activity', 'activities'], serial)
     if code == 0 and out:
-        if 'mResumedActivity' in out and package in out:
-            return True
-        lines = out.split('\n')
-        for line in lines:
-            if 'mResumedActivity' in line and package in line:
-                return True
+        for keyword in ['mResumedActivity', 'ResumedActivity', 'topResumedActivity']:
+            if keyword in out:
+                lines = out.split('\n')
+                for line in lines:
+                    if keyword in line and package in line:
+                        return True
     return False
 
 def adb_check_network_active(serial, package='com.roblox.client'):
