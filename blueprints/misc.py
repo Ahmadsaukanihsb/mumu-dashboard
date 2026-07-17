@@ -192,7 +192,7 @@ def receive_status():
     status = data.get('status', 'unknown')
     msg = data.get('message', '')
     for acc in accounts:
-        if acc['name'] == acc_name:
+        if acc['name'].lower() == acc_name.lower():
             old_status = acc.get('status', '')
             acc['status'] = status
             if status in ('monitoring', 'active', 'connected'):
@@ -1440,7 +1440,7 @@ def remote_status():
     kicked = data.get('kicked')
     print(f'[REMOTE] {account_name} ({package}): {status} tc={tc} kicked={kicked}')
     for acc in accounts:
-        if acc.get('name') == account_name or acc.get('package_name') == package:
+        if acc.get('name', '').lower() == account_name.lower() or acc.get('package_name') == package:
             old_status = acc.get('status', '')
             acc['status'] = status
             if status in ('in_game', 'monitoring', 'connected', 'active'):
