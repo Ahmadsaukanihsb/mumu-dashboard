@@ -675,13 +675,17 @@ function updateInventory() {
         return;
     }
     
-    // Show ALL accounts that have inventory data
-    const allAccNames = accNames;
+    // Show only accounts with inventory that are ACTIVE (script running)
+    const activeStatuses = ['connected', 'monitoring', 'active', 'in_game', 'rejoining'];
+    const activeAccNames = accNames.filter(name => {
+        const acc = accounts.find(a => a.name.toLowerCase() === name.toLowerCase());
+        return acc && activeStatuses.includes(acc.status);
+    });
     
     // Calculate total sheckles and net worth
     let totalSheckles = 0;
     let totalWorth = 0;
-    const accountCards = allAccNames.map(name => {
+    const accountCards = activeAccNames.map(name => {
         const data = inventoryData[name];
         const sheckles = data.sheckles || 0;
         totalSheckles += sheckles;
@@ -690,7 +694,7 @@ function updateInventory() {
             const price = itemThumbnails[item.name + '_price'] || 0;
             totalWorth += price * (item.count || 0);
         });
-        const acc = accounts.find(a => a.name === name);
+        const acc = accounts.find(a => a.name.toLowerCase() === name.toLowerCase());
         const statusBadge = acc ? `<span class="badge badge-${acc.status === 'active' ? 'success' : 'info'}" style="font-size:9px;margin-left:4px">${acc.status}</span>` : '';
         return `
         <div class="inventory-account-card ${currentAccount === name ? 'selected' : ''}" onclick="filterByAccount('${esc(name)}')">
@@ -716,7 +720,7 @@ function updateInventory() {
             <div class="inventory-account-stats">
                 <div class="inventory-account-stat">
                     <span class="inventory-account-stat-label">Accounts</span>
-                    <span class="inventory-account-stat-value">${allAccNames.length}</span>
+                    <span class="inventory-account-stat-value">${activeAccNames.length}</span>
                 </div>
                 <div class="inventory-account-stat">
                     <span class="inventory-account-stat-label">Net Worth</span>
@@ -728,7 +732,7 @@ function updateInventory() {
     
     // Collect all unique items across online accounts
     const allItems = {};
-    allAccNames.forEach(name => {
+    activeAccNames.forEach(name => {
         const data = inventoryData[name];
         const items = data.items || [];
         items.forEach(item => {
