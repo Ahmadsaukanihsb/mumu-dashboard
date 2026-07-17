@@ -675,18 +675,13 @@ function updateInventory() {
         return;
     }
     
-    // Filter: only show accounts that are online/active
-    const onlineStatuses = ['connected', 'monitoring', 'active'];
-    const onlineAccounts = accounts.filter(a => onlineStatuses.includes(a.status));
-    const onlineNames = onlineAccounts.map(a => a.name);
-    
-    // Only show inventory for online accounts
-    const onlineAccNames = accNames.filter(name => onlineNames.includes(name));
+    // Show ALL accounts that have inventory data
+    const allAccNames = accNames;
     
     // Calculate total sheckles and net worth
     let totalSheckles = 0;
     let totalWorth = 0;
-    const accountCards = onlineAccNames.map(name => {
+    const accountCards = allAccNames.map(name => {
         const data = inventoryData[name];
         const sheckles = data.sheckles || 0;
         totalSheckles += sheckles;
@@ -721,7 +716,7 @@ function updateInventory() {
             <div class="inventory-account-stats">
                 <div class="inventory-account-stat">
                     <span class="inventory-account-stat-label">Accounts</span>
-                    <span class="inventory-account-stat-value">${onlineAccNames.length}</span>
+                    <span class="inventory-account-stat-value">${allAccNames.length}</span>
                 </div>
                 <div class="inventory-account-stat">
                     <span class="inventory-account-stat-label">Net Worth</span>
@@ -733,7 +728,7 @@ function updateInventory() {
     
     // Collect all unique items across online accounts
     const allItems = {};
-    onlineAccNames.forEach(name => {
+    allAccNames.forEach(name => {
         const data = inventoryData[name];
         const items = data.items || [];
         items.forEach(item => {

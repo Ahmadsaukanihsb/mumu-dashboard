@@ -267,6 +267,9 @@ def receive_inventory():
     sheckles = data.get('sheckles', 0)
     if not acc_name:
         return jsonify({'error': 'No account name'}), 400
+    matched_acc = next((a for a in accounts if a.get('name', '').lower() == acc_name.lower()), None)
+    if matched_acc:
+        acc_name = matched_acc['name']
     item_counts = {}
     for item in items:
         name = item.get('name', 'Unknown')
