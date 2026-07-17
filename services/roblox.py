@@ -39,6 +39,10 @@ def build_join_link(sv):
     base = sv.get('place_id', '')
     if not base:
         return None
+    if sv.get('type') == 'private':
+        code = sv.get('server_code', '')
+        if code:
+            return f'roblox://placeId={base}&privateServerLinkCode={code}'
     return f'roblox://placeId={base}'
 
 def _adb_extract_cookie(serial):
