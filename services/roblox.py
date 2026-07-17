@@ -40,12 +40,10 @@ def build_join_link(sv):
     if not base:
         return None
     if sv.get('type') == 'private':
-        if sv.get('link'):
-            return sv['link']
         code = sv.get('server_code', '')
         if code:
             import urllib.parse
-            return f'https://www.roblox.com/share?code={urllib.parse.quote(code)}&type=Server'
+            return f'roblox://share?code={urllib.parse.quote(code)}&type=Server'
     return f'roblox://placeId={base}'
 
 def _adb_extract_cookie(serial):
