@@ -202,6 +202,27 @@ class RootMonitor:
                 results.append({'package': pkg, 'success': False, 'has_cookie': False})
         return results
 
+    def push_script_to_all(self):
+        script_resp = self.http_get('/api/generate-script')
+        if not script_resp or not script_resp.get('script'):
+            print('[SCRIPT] Failed to get script from dashboard')
+            return []
+        script = script_resp['script'].replace('http://localhost:5000', self.dashboard_url)
+        import tempfile, os
+        tmp = os.path.join(tempfile.gettempdir(), 'monitor.luau')
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(script)
+        results = []
+        for pkg in self.packages:
+            dest = f'/data/data/{pkg}/files/Delta/Autoexecute/monitor.luau'
+            code, out = self.su_cmd(f'cp {tmp} {dest}')
+            success = code == 0
+            print(f'[{pkg}] Push script: {"OK" if success else "FAILED: " + out}')
+            results.append({'package': pkg, 'success': success})
+        try: os.remove(tmp)
+        except: pass
+        return results
+
     def http_get(self, path):
         url = f'{self.dashboard_url}{path}'
         try:
@@ -287,6 +308,9 @@ class RootMonitor:
         if not self.register():
             print('[MONITOR] ERROR: Failed to register to dashboard')
             return
+
+        print('[MONITOR] Pushing scripts to all packages...')
+        self.push_script_to_all()
 
         self.running = True
         self._last_rejoin = {}
