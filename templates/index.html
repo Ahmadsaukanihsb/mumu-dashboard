@@ -130,6 +130,9 @@
                 <a class="nav-item" data-page="command" onclick="switchPage('command')">
                     <i class="fas fa-terminal"></i><span>Command</span>
                 </a>
+                <a class="nav-item" data-page="termux" onclick="switchPage('termux')">
+                    <i class="fas fa-mobile-alt"></i><span>Termux Guide</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -1043,6 +1046,164 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Termux Guide Page -->
+                <div class="page" id="page-termux">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-mobile-alt"></i> Setup Termux (Redfinger)</h3>
+                        </div>
+                        <div class="card-body">
+                            <!-- Step 1 -->
+                            <div class="instruction-step" style="margin-bottom:20px">
+                                <span class="step-num">1</span>
+                                <div>
+                                    <strong>Install Termux</strong>
+                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Download dari F-Droid (bukan Play Store)</p>
+                                    <a href="https://f-droid.org/en/packages/com.termux/" target="_blank" class="btn btn-sm btn-secondary" style="margin-top:4px">
+                                        <i class="fas fa-download"></i> Download Termux
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Step 2 -->
+                            <div class="instruction-step" style="margin-bottom:20px">
+                                <span class="step-num">2</span>
+                                <div>
+                                    <strong>Buka Termux & Jalankan Setup</strong>
+                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Copy-paste command ini di Termux:</p>
+                                    <div class="code-block" style="position:relative;margin-top:8px">
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">pkg update -y && pkg install python adb git curl cloudflared -y && pip install flask flask-cors werkzeug && git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox && bash ~/dashboard-roblox/setup_termux.sh</pre>
+                                        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 3 -->
+                            <div class="instruction-step" style="margin-bottom:20px">
+                                <span class="step-num">3</span>
+                                <div>
+                                    <strong>Start Dashboard</strong>
+                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Jalankan dashboard di Termux:</p>
+                                    <div class="code-block" style="position:relative;margin-top:8px">
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox && bash run_termux.sh</pre>
+                                        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 4 -->
+                            <div class="instruction-step" style="margin-bottom:20px">
+                                <span class="step-num">4</span>
+                                <div>
+                                    <strong>Start Remote Monitor (Optional)</strong>
+                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Auto-rejoin & monitor untuk Cloudphone accounts:</p>
+                                    <div class="code-block" style="position:relative;margin-top:8px">
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox && python remote_monitor.py --url https://dashboard.aavpanel.my.id</pre>
+                                        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 5 -->
+                            <div class="instruction-step" style="margin-bottom:20px">
+                                <span class="step-num">5</span>
+                                <div>
+                                    <strong>Akses dari PC</strong>
+                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Buka browser di PC:</p>
+                                    <div class="code-block" style="position:relative;margin-top:8px">
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">https://dashboard.aavpanel.my.id</pre>
+                                        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Remote Monitor Info -->
+                    <div class="card" style="margin-top:16px">
+                        <div class="card-header">
+                            <h3><i class="fas fa-info-circle"></i> Remote Monitor Info</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                                <div>
+                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:8px"><i class="fas fa-cog"></i> Yang Dilakukan</h4>
+                                    <ul style="font-size:12px;color:var(--text-secondary);list-style:none;padding:0">
+                                        <li style="margin-bottom:4px">✓ Auto-discover Roblox packages</li>
+                                        <li style="margin-bottom:4px">✓ Auto-create accounts di dashboard</li>
+                                        <li style="margin-bottom:4px">✓ Auto-extract cookies</li>
+                                        <li style="margin-bottom:4px">✓ Auto-push scripts ke apps</li>
+                                        <li style="margin-bottom:4px">✓ Auto-rejoin saat kicked/disconnect</li>
+                                        <li style="margin-bottom:4px">✓ Monitor status ke dashboard</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:8px"><i class="fas fa-exclamation-triangle"></i> Persyaratan</h4>
+                                    <ul style="font-size:12px;color:var(--text-secondary);list-style:none;padding:0">
+                                        <li style="margin-bottom:4px">✓ Root access di device</li>
+                                        <li style="margin-bottom:4px">✓ Internet connection</li>
+                                        <li style="margin-bottom:4px">✓ Roblox apps terinstall</li>
+                                        <li style="margin-bottom:4px">✓ Delta Executor terinstall</li>
+                                        <li style="margin-bottom:4px">✓ Dashboard PC running</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Commands Reference -->
+                    <div class="card" style="margin-top:16px">
+                        <div class="card-header">
+                            <h3><i class="fas fa-code"></i> Commands Reference</h3>
+                        </div>
+                        <div class="card-body">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                                <div>
+                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:8px">Setup</h4>
+                                    <div class="code-block" style="font-size:11px">
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Install dependencies
+pkg update -y
+pkg install python adb git curl cloudflared
+
+# Install Python packages
+pip install flask flask-cors werkzeug
+
+# Clone project
+git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox
+
+# Setup
+bash ~/dashboard-roblox/setup_termux.sh</pre>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:8px">Run</h4>
+                                    <div class="code-block" style="font-size:11px">
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Start dashboard
+cd ~/dashboard-roblox
+bash run_termux.sh
+
+# Start remote monitor
+python remote_monitor.py --url https://dashboard.aavpanel.my.id
+
+# Update project
+cd ~/dashboard-roblox
+git pull</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 </div><!-- /content-inner -->
             </div>
         </main>

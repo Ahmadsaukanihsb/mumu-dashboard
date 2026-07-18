@@ -116,7 +116,8 @@ function switchPage(page) {
         scripts: { title: 'Scripts', icon: 'code' },
         logs: { title: 'Logs', icon: 'clipboard-list' },
         inventory: { title: 'Inventory', icon: 'box-open' },
-        command: { title: 'Command', icon: 'terminal' }
+        command: { title: 'Command', icon: 'terminal' },
+        termux: { title: 'Termux Guide', icon: 'mobile-alt' }
     };
     const meta = pageMeta[page] || { title: 'Dashboard', icon: 'chart-pie' };
     document.getElementById('pageTitle').textContent = meta.title;
