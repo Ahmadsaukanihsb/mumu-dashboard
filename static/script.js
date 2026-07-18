@@ -2915,7 +2915,13 @@ function editSchedule(id) {
 
 function loadScheduleAccountSelect() {
     const select = document.getElementById('schedAccount');
-    select.innerHTML = accounts.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
+    const activeStatuses = ['connected', 'monitoring', 'active', 'in_game', 'rejoining', 'loading'];
+    const activeAccounts = accounts.filter(a => activeStatuses.includes(a.status));
+    if (activeAccounts.length === 0) {
+        select.innerHTML = '<option value="">No active accounts</option>';
+        return;
+    }
+    select.innerHTML = activeAccounts.map(a => `<option value="${esc(a.name)}">${esc(a.name)} (${a.status})</option>`).join('');
 }
 
 function addScheduleItem() {
