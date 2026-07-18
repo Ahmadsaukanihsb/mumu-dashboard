@@ -2893,7 +2893,10 @@ function showAddSchedule() {
     document.getElementById('schedRepeat').value = 'daily';
     scheduleEditItems = [];
     renderScheduleItems();
-    loadScheduleAccountSelect();
+    loadScheduleAccountSelect().then(() => {
+        const select = document.getElementById('schedAccount');
+        if (select.value) loadScheduleInventory(select.value);
+    });
     openModal('scheduleModal');
 }
 
@@ -2909,19 +2912,54 @@ function editSchedule(id) {
     renderScheduleItems();
     loadScheduleAccountSelect().then(() => {
         document.getElementById('schedAccount').value = sched.account;
+        loadScheduleInventory(sched.account);
     });
     openModal('scheduleModal');
 }
 
-function loadScheduleAccountSelect() {
+async function loadScheduleAccountSelect() {
     const select = document.getElementById('schedAccount');
-    const activeStatuses = ['connected', 'monitoring', 'active', 'in_game', 'rejoining', 'loading'];
-    const activeAccounts = accounts.filter(a => activeStatuses.includes(a.status));
-    if (activeAccounts.length === 0) {
-        select.innerHTML = '<option value="">No active accounts</option>';
-        return;
+    try {
+        const inv = await api('GET', '/api/inventory');
+        const accNames = Object.keys(inv || {});
+        if (accNames.length === 0) {
+            select.innerHTML = '<option value="">No active accounts</option>';
+            return;
+        }
+        select.innerHTML = accNames.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+        select.onchange = () => loadScheduleInventory(select.value);
+    } catch (e) {
+        select.innerHTML = '<option value="">Error loading accounts</option>';
     }
-    select.innerHTML = activeAccounts.map(a => `<option value="${esc(a.name)}">${esc(a.name)} (${a.status})</option>`).join('');
+}
+
+async function loadScheduleInventory(account) {
+    const container = document.getElementById('schedItemsList');
+    if (!account) { container.innerHTML = ''; return; }
+    try {
+        const resp = await api('POST', '/api/mailbox/inventory', {account});
+        if (!resp || !resp.items || resp.items.length === 0) {
+            container.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">No items</div>';
+            return;
+        }
+        container.innerHTML = resp.items.map(item => `
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:12px;padding:4px 8px;background:var(--bg-input);border-radius:6px;cursor:pointer" onclick="addScheduleItemFromInventory('${esc(item.name)}', '${esc(item.id)}', '${esc(item.category)}', ${item.qty})">
+                <span style="flex:1">${esc(item.name)} (${item.category})</span>
+                <span style="color:var(--text-muted)">x${item.qty}</span>
+                <i class="fas fa-plus" style="color:var(--green);font-size:10px"></i>
+            </div>
+        `).join('');
+    } catch (e) {
+        container.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">Error loading inventory</div>';
+    }
+}
+
+function addScheduleItemFromInventory(name, id, category, maxQty) {
+    const qtyInput = document.getElementById('schedItemQty');
+    const qty = parseInt(qtyInput.value) || Math.min(maxQty, 100);
+    scheduleEditItems.push({name, id, category, qty});
+    renderScheduleItems();
+    showToast(`Added ${name} x${qty}`, 'success');
 }
 
 function addScheduleItem() {
