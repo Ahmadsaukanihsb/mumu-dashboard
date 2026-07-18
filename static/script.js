@@ -676,17 +676,14 @@ function updateInventory() {
         return;
     }
     
-    // Show only accounts with inventory that are ACTIVE (script running)
-    const activeStatuses = ['connected', 'monitoring', 'active', 'in_game', 'rejoining'];
-    const activeAccNames = accNames.filter(name => {
-        const acc = accounts.find(a => a.name.toLowerCase() === name.toLowerCase());
-        return acc && activeStatuses.includes(acc.status);
-    });
+    // Show ALL accounts that have inventory data (even if not in accounts list)
+    const activeStatuses = ['connected', 'monitoring', 'active', 'in_game', 'rejoining', 'loading'];
+    const displayAccNames = accNames;
     
     // Calculate total sheckles and net worth
     let totalSheckles = 0;
     let totalWorth = 0;
-    const accountCards = activeAccNames.map(name => {
+    const accountCards = displayAccNames.map(name => {
         const data = inventoryData[name];
         const sheckles = data.sheckles || 0;
         totalSheckles += sheckles;
@@ -721,7 +718,7 @@ function updateInventory() {
             <div class="inventory-account-stats">
                 <div class="inventory-account-stat">
                     <span class="inventory-account-stat-label">Accounts</span>
-                    <span class="inventory-account-stat-value">${activeAccNames.length}</span>
+                    <span class="inventory-account-stat-value">${displayAccNames.length}</span>
                 </div>
                 <div class="inventory-account-stat">
                     <span class="inventory-account-stat-label">Net Worth</span>
@@ -733,7 +730,7 @@ function updateInventory() {
     
     // Collect all unique items across online accounts
     const allItems = {};
-    activeAccNames.forEach(name => {
+    displayAccNames.forEach(name => {
         const data = inventoryData[name];
         const items = data.items || [];
         items.forEach(item => {
