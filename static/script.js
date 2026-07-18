@@ -2942,24 +2942,57 @@ async function loadScheduleInventory(account) {
             container.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">No items</div>';
             return;
         }
-        container.innerHTML = resp.items.map(item => `
-            <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:12px;padding:4px 8px;background:var(--bg-input);border-radius:6px;cursor:pointer" onclick="addScheduleItemFromInventory('${esc(item.name)}', '${esc(item.id)}', '${esc(item.category)}', ${item.qty})">
-                <span style="flex:1">${esc(item.name)} (${item.category})</span>
-                <span style="color:var(--text-muted)">x${item.qty}</span>
-                <i class="fas fa-plus" style="color:var(--green);font-size:10px"></i>
+        container.innerHTML = `
+            <div style="margin-bottom:6px">
+                <button class="btn btn-sm btn-primary" onclick="addAllScheduleItems()" style="font-size:10px">
+                    <i class="fas fa-check-double"></i> Add All (${resp.items.length} items)
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="clearScheduleItems()" style="font-size:10px">
+                    <i class="fas fa-times"></i> Clear
+                </button>
             </div>
-        `).join('');
+            ${resp.items.map(item => `
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:12px;padding:4px 8px;background:var(--bg-input);border-radius:6px;cursor:pointer" onclick="addScheduleItemFromInventory('${esc(item.name)}', '${esc(item.id)}', '${esc(item.category)}', ${item.qty})">
+                    <span style="flex:1">${esc(item.name)} (${item.category})</span>
+                    <span style="color:var(--text-muted)">x${item.qty}</span>
+                    <i class="fas fa-plus" style="color:var(--green);font-size:10px"></i>
+                </div>
+            `).join('')}
+        `;
     } catch (e) {
         container.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">Error loading inventory</div>';
     }
 }
 
 function addScheduleItemFromInventory(name, id, category, maxQty) {
-    const qtyInput = document.getElementById('schedItemQty');
-    const qty = parseInt(qtyInput.value) || Math.min(maxQty, 100);
-    scheduleEditItems.push({name, id, category, qty});
+    scheduleEditItems.push({name, id, category, qty: maxQty});
     renderScheduleItems();
-    showToast(`Added ${name} x${qty}`, 'success');
+    showToast(`Added ${name} x${maxQty}`, 'success');
+}
+
+async function addAllScheduleItems() {
+    const account = document.getElementById('schedAccount').value;
+    if (!account) return;
+    try {
+        const resp = await api('POST', '/api/mailbox/inventory', {account});
+        if (resp && resp.items) {
+            scheduleEditItems = resp.items.map(item => ({
+                name: item.name,
+                id: item.id,
+                category: item.category,
+                qty: item.qty
+            }));
+            renderScheduleItems();
+            showToast(`Added ${resp.items.length} items`, 'success');
+        }
+    } catch (e) {
+        showToast('Error loading inventory', 'error');
+    }
+}
+
+function clearScheduleItems() {
+    scheduleEditItems = [];
+    renderScheduleItems();
 }
 
 function addScheduleItem() {
@@ -2977,10 +3010,17 @@ function removeScheduleItem(idx) {
 }
 
 function renderScheduleItems() {
-    const container = document.getElementById('schedItemsList');
-    container.innerHTML = scheduleEditItems.map((item, i) => `
-        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:12px">
-            <span style="flex:1">${esc(item.name)} x${item.qty}</span>
+    const container = document.getElementById('schedSelectedItems');
+    if (!container) return;
+    if (scheduleEditItems.length === 0) {
+        container.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">Belum ada item dipilih</div>';
+        return;
+    }
+    container.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:6px">Selected Items (' + scheduleEditItems.length + '):</div>' +
+        scheduleEditItems.map((item, i) => `
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:12px;padding:4px 8px;background:var(--bg-input);border-radius:6px">
+            <span style="flex:1">${esc(item.name)}</span>
+            <span style="color:var(--text-muted)">x${item.qty}</span>
             <button class="btn btn-sm btn-danger" onclick="removeScheduleItem(${i})" style="padding:2px 6px"><i class="fas fa-times"></i></button>
         </div>
     `).join('');
