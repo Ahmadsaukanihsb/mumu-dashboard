@@ -2,7 +2,7 @@ import re, os, json, time, uuid, urllib.request, urllib.parse
 
 from flask import Blueprint, render_template, request, jsonify
 
-from models import accounts, servers, settings, activity_log, acc_logs, inventory_data, harvested_fruits_data, _data_lock, monitor_state, log_activity, log_account, save_data, get_package_name
+from models import accounts, servers, settings, activity_log, acc_logs, inventory_data, harvested_fruits_data, _data_lock, monitor_state, log_activity, log_account, save_data, get_package_name, schedules, schedule_history
 from services.adb import find_adb, get_serial, adb_connect, adb_cmd, adb_force_stop_roblox, adb_check_join_failed, adb_dismiss_dialogs, adb_screenshot
 from services.mumu import mumu_vm_cmd, load_vm_display_names, find_mumu_vmm, find_mumu_vms_dir, ensure_vm_running, launch_mumu
 from services.roblox import verify_cookie, build_join_link
@@ -1660,3 +1660,174 @@ def remote_command_complete(cmd_id):
                 cmd['status'] = 'completed' if success else 'failed'
                 break
     return jsonify({'success': True})
+
+
+# ==================== AUTO SEND SCHEDULE ====================
+from datetime import datetime, timedelta
+
+def calculate_next_run(schedule):
+    now = datetime.now()
+    time_parts = schedule.get('time', '12:00').split(':')
+    hour = int(time_parts[0]) if len(time_parts) > 0 else 12
+    minute = int(time_parts[1]) if len(time_parts) > 1 else 0
+    repeat = schedule.get('repeat', 'daily')
+    
+    if repeat == 'once':
+        next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if next_run <= now:
+            next_run += timedelta(days=1)
+    elif repeat == 'daily':
+        next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if next_run <= now:
+            next_run += timedelta(days=1)
+    elif repeat.startswith('every_'):
+        hours = int(repeat.split('_')[1]) if repeat.split('_')[1].isdigit() else 1
+        next_run = now + timedelta(hours=hours)
+    else:
+        next_run = now + timedelta(days=1)
+    
+    return next_run.strftime('%Y-%m-%d %H:%M:%S')
+
+@misc_bp.route('/api/schedule/list', methods=['GET'])
+def schedule_list():
+    return jsonify({'schedules': schedules, 'history': schedule_history[-50:]})
+
+@misc_bp.route('/api/schedule/create', methods=['POST'])
+def schedule_create():
+    data = request.json or {}
+    account = data.get('account', '')
+    target = data.get('target', '')
+    items = data.get('items', [])
+    schedule_time = data.get('time', '12:00')
+    repeat = data.get('repeat', 'daily')
+    
+    if not account or not target:
+        return jsonify({'error': 'account and target required'}), 400
+    if not items:
+        return jsonify({'error': 'items required'}), 400
+    
+    schedule = {
+        'id': f"sched_{int(time.time() * 1000)}",
+        'account': account,
+        'target': target,
+        'items': items,
+        'time': schedule_time,
+        'repeat': repeat,
+        'enabled': True,
+        'last_run': None,
+        'next_run': calculate_next_run({'time': schedule_time, 'repeat': repeat}),
+        'created_at': time.strftime('%Y-%m-%d %H:%M:%S')
+    }
+    
+    with _data_lock:
+        schedules.append(schedule)
+    save_data()
+    log_activity(f'Schedule created: {account} → {target} at {schedule_time} ({repeat})')
+    return jsonify({'success': True, 'schedule': schedule})
+
+@misc_bp.route('/api/schedule/<sched_id>', methods=['PUT'])
+def schedule_update(sched_id):
+    data = request.json or {}
+    with _data_lock:
+        sched = next((s for s in schedules if s['id'] == sched_id), None)
+        if not sched:
+            return jsonify({'error': 'Schedule not found'}), 404
+        if 'account' in data: sched['account'] = data['account']
+        if 'target' in data: sched['target'] = data['target']
+        if 'items' in data: sched['items'] = data['items']
+        if 'time' in data: sched['time'] = data['time']
+        if 'repeat' in data: sched['repeat'] = data['repeat']
+        if 'enabled' in data: sched['enabled'] = data['enabled']
+        sched['next_run'] = calculate_next_run(sched)
+    save_data()
+    log_activity(f'Schedule updated: {sched_id}')
+    return jsonify({'success': True, 'schedule': sched})
+
+@misc_bp.route('/api/schedule/<sched_id>', methods=['DELETE'])
+def schedule_delete(sched_id):
+    with _data_lock:
+        sched = next((s for s in schedules if s['id'] == sched_id), None)
+        if not sched:
+            return jsonify({'error': 'Schedule not found'}), 404
+        schedules.remove(sched)
+    save_data()
+    log_activity(f'Schedule deleted: {sched_id}')
+    return jsonify({'success': True})
+
+@misc_bp.route('/api/schedule/toggle', methods=['POST'])
+def schedule_toggle():
+    data = request.json or {}
+    sched_id = data.get('id', '')
+    enabled = data.get('enabled', True)
+    with _data_lock:
+        sched = next((s for s in schedules if s['id'] == sched_id), None)
+        if not sched:
+            return jsonify({'error': 'Schedule not found'}), 404
+        sched['enabled'] = enabled
+    save_data()
+    return jsonify({'success': True, 'enabled': enabled})
+
+@misc_bp.route('/api/schedule/history', methods=['GET'])
+def schedule_history_list():
+    limit = request.args.get('limit', 50, type=int)
+    return jsonify({'history': schedule_history[-limit:]})
+
+def check_schedules():
+    now = datetime.now()
+    with _data_lock:
+        for sched in schedules:
+            if not sched.get('enabled'):
+                continue
+            next_run_str = sched.get('next_run', '')
+            if not next_run_str:
+                continue
+            try:
+                next_run = datetime.strptime(next_run_str, '%Y-%m-%d %H:%M:%S')
+            except:
+                continue
+            if next_run > now:
+                continue
+            account = sched.get('account', '')
+            target = sched.get('target', '')
+            items = sched.get('items', [])
+            if not account or not target or not items:
+                continue
+            target_id = 0
+            for acc in accounts:
+                if acc.get('name', '').lower() == target.lower():
+                    target_id = int(acc.get('verified_id', 0))
+                    break
+            if not target_id:
+                from blueprints.mailbox import lookup_user_id
+                target_id = lookup_user_id(target)
+            if not target_id:
+                log_activity(f'Schedule {sched["id"]}: target "{target}" not found', 'warning')
+                continue
+            from blueprints.mailbox import mailbox_commands, command_lock
+            cmd_id = f"mail_{int(time.time() * 1000)}"
+            cmd_items = [{'name': item.get('name', ''), 'id': item.get('id', ''), 'category': item.get('category', 'Other'), 'count': item.get('qty', 1)} for item in items]
+            command = {'id': cmd_id, 'type': 'send_mail', 'account': account, 'target': target, 'target_id': target_id, 'items': cmd_items, 'note': f'Scheduled send', 'timestamp': time.time(), 'status': 'pending'}
+            with command_lock:
+                mailbox_commands.append(command)
+            history_entry = {'id': f"hist_{int(time.time() * 1000)}", 'schedule_id': sched['id'], 'account': account, 'target': target, 'items_sent': sum(item.get('qty', 1) for item in items), 'status': 'queued', 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'), 'message': f'{len(items)} items queued'}
+            schedule_history.append(history_entry)
+            if len(schedule_history) > 500:
+                schedule_history.pop(0)
+            sched['last_run'] = time.strftime('%Y-%m-%d %H:%M:%S')
+            sched['next_run'] = calculate_next_run(sched)
+            log_activity(f'Schedule executed: {account} → {target} ({len(items)} items)')
+            send_webhook(f'📤 Scheduled Send', f'**From:** {account}\n**To:** {target}\n**Items:** {len(items)} items\n**Time:** {time.strftime("%H:%M:%S")}', 0x3498db)
+    save_data()
+
+def start_scheduler():
+    import threading
+    def scheduler_loop():
+        while True:
+            try:
+                check_schedules()
+            except Exception as e:
+                print(f'[Scheduler] Error: {e}')
+            time.sleep(60)
+    t = threading.Thread(target=scheduler_loop, daemon=True)
+    t.start()
+    print('[Scheduler] Started (checks every 60s)')

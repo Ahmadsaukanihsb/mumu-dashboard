@@ -856,6 +856,9 @@
                         <button class="btn btn-sm btn-secondary mailbox-tab" data-tab="seedshop" onclick="switchMailboxTab('seedshop')">
                             <i class="fas fa-seedling"></i> Seed Shop Auto-Buy
                         </button>
+                        <button class="btn btn-sm btn-secondary mailbox-tab" data-tab="schedule" onclick="switchMailboxTab('schedule')">
+                            <i class="fas fa-clock"></i> Auto Send Schedule
+                        </button>
                     </div>
                     
                     <!-- Mailbox Send Content -->
@@ -1045,6 +1048,85 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Auto Send Schedule Content -->
+                    <div class="mailbox-content" id="mailbox-schedule" style="display:none">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-clock"></i> Auto Send Schedule</h3>
+                                <div style="display:flex;gap:6px">
+                                    <button class="btn btn-sm btn-secondary" onclick="loadSchedules()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                                    <button class="btn btn-sm btn-primary" onclick="showAddSchedule()"><i class="fas fa-plus"></i> Add Schedule</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="scheduleList">
+                                    <div class="empty-state"><i class="fas fa-clock"></i> Belum ada schedule</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card" style="margin-top:16px">
+                            <div class="card-header">
+                                <h3><i class="fas fa-history"></i> Send History</h3>
+                                <button class="btn btn-sm btn-secondary" onclick="loadScheduleHistory()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                            </div>
+                            <div class="card-body" style="max-height:300px;overflow-y:auto" id="scheduleHistory">
+                                <div class="empty-state"><i class="fas fa-history"></i> Belum ada history</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add/Edit Schedule Modal -->
+                    <div class="modal" id="scheduleModal">
+                        <div class="modal-backdrop" onclick="closeModal('scheduleModal')"></div>
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3 id="scheduleModalTitle"><i class="fas fa-clock"></i> Add Schedule</h3>
+                                <button class="modal-close" onclick="closeModal('scheduleModal')"><i class="fas fa-times"></i></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" id="editScheduleId">
+                                <div class="form-group">
+                                    <label>Account (Pengirim)</label>
+                                    <select class="input" id="schedAccount"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Target Username</label>
+                                    <input type="text" class="input" id="schedTarget" placeholder="Username penerima">
+                                </div>
+                                <div class="form-group">
+                                    <label>Items</label>
+                                    <div id="schedItemsList" style="margin-bottom:8px"></div>
+                                    <div style="display:flex;gap:6px">
+                                        <input type="text" class="input" id="schedItemName" placeholder="Item name" style="flex:1">
+                                        <input type="number" class="input" id="schedItemQty" placeholder="Qty" value="100" style="width:80px">
+                                        <button class="btn btn-sm btn-secondary" onclick="addScheduleItem()"><i class="fas fa-plus"></i></button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Time (HH:MM)</label>
+                                    <input type="time" class="input" id="schedTime" value="12:00">
+                                </div>
+                                <div class="form-group">
+                                    <label>Repeat</label>
+                                    <select class="input" id="schedRepeat">
+                                        <option value="once">Once</option>
+                                        <option value="daily" selected>Daily</option>
+                                        <option value="every_2">Every 2 hours</option>
+                                        <option value="every_4">Every 4 hours</option>
+                                        <option value="every_6">Every 6 hours</option>
+                                        <option value="every_12">Every 12 hours</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-secondary" onclick="closeModal('scheduleModal')">Cancel</button>
+                                <button class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- Termux Guide Page -->

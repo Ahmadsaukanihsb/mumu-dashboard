@@ -40,6 +40,9 @@ def decrypt_cookie(cookie):
     except:
         return cookie
 
+schedules = []
+schedule_history = []
+
 def get_package_name(instance_idx):
     pkgs = settings.get('active_packages', PACKAGE_MAP)
     return pkgs.get(instance_idx, f'com.roblox.client')
@@ -120,7 +123,11 @@ def load_data():
         saved_hf = data.get('harvested_fruits_data', {})
         if saved_hf:
             harvested_fruits_data.update(saved_hf)
-        print(f'[OK] Loaded {len(accounts)} accounts, {len(servers)} servers')
+        schedules.clear()
+        schedules.extend(data.get('schedules', []))
+        schedule_history.clear()
+        schedule_history.extend(data.get('schedule_history', []))
+        print(f'[OK] Loaded {len(accounts)} accounts, {len(servers)} servers, {len(schedules)} schedules')
     else:
         print('[ERROR] Tidak ada data yang bisa di-load!')
 
@@ -142,6 +149,8 @@ def save_data():
         snap_settings = dict(settings)
         snap_logs = {k: v[:100] for k, v in acc_logs.items()}
         snap_hf = {k: v for k, v in harvested_fruits_data.items()}
+        snap_schedules = list(schedules)
+        snap_history = list(schedule_history[-500:])
         tmp = DATA_FILE + '.tmp'
         try:
             with open(tmp, 'w') as f:
@@ -150,7 +159,9 @@ def save_data():
                     'servers': snap_servers,
                     'settings': snap_settings,
                     'account_logs': snap_logs,
-                    'harvested_fruits_data': snap_hf
+                    'harvested_fruits_data': snap_hf,
+                    'schedules': snap_schedules,
+                    'schedule_history': snap_history
                 }, f, indent=2)
             os.replace(tmp, DATA_FILE)
         except Exception as e:

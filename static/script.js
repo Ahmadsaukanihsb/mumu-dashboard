@@ -2809,6 +2809,194 @@ async function saveSeedShopConfig() {
     }
 }
 
+// ==================== SCHEDULE FUNCTIONS ====================
+
+let scheduleList = [];
+let scheduleHistoryList = [];
+let scheduleEditItems = [];
+
+async function loadSchedules() {
+    try {
+        const resp = await api('GET', '/api/schedule/list');
+        if (resp) {
+            scheduleList = resp.schedules || [];
+            scheduleHistoryList = resp.history || [];
+            renderScheduleList();
+            renderScheduleHistory();
+        }
+    } catch (e) {
+        showToast('Error loading schedules', 'error');
+    }
+}
+
+function renderScheduleList() {
+    const container = document.getElementById('scheduleList');
+    if (!container) return;
+    if (scheduleList.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-clock"></i> Belum ada schedule</div>';
+        return;
+    }
+    container.innerHTML = scheduleList.map(s => {
+        const repeatLabels = {once:'Once', daily:'Daily', every_2:'Every 2h', every_4:'Every 4h', every_6:'Every 6h', every_12:'Every 12h'};
+        const repeatText = repeatLabels[s.repeat] || s.repeat;
+        const itemsText = (s.items || []).map(i => `${i.name} x${i.qty}`).join(', ');
+        return `
+        <div style="padding:12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <div style="font-weight:600;font-size:13px">${esc(s.account)} → ${esc(s.target)}</div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">
+                        Items: ${esc(itemsText)} | Time: ${s.time} | ${repeatText}
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                        Next: ${s.next_run || 'N/A'} | Last: ${s.last_run || 'Never'}
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <label class="toggle" style="margin:0">
+                        <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSchedule('${s.id}', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <button class="btn btn-sm btn-secondary" onclick="editSchedule('${s.id}')"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSchedule('${s.id}')"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderScheduleHistory() {
+    const container = document.getElementById('scheduleHistory');
+    if (!container) return;
+    if (scheduleHistoryList.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-history"></i> Belum ada history</div>';
+        return;
+    }
+    container.innerHTML = scheduleHistoryList.reverse().map(h => `
+        <div style="padding:8px;border-bottom:1px solid var(--border-color);font-size:12px">
+            <div style="display:flex;justify-content:space-between">
+                <span><strong>${esc(h.account)}</strong> → ${esc(h.target)}</span>
+                <span style="color:var(--text-muted)">${h.timestamp}</span>
+            </div>
+            <div style="color:var(--text-secondary);margin-top:2px">
+                ${h.items_sent} items | <span style="color:${h.status==='success'?'var(--green)':'var(--red)'}">${h.status}</span> | ${esc(h.message)}
+            </div>
+        </div>
+    `).join('');
+}
+
+function showAddSchedule() {
+    document.getElementById('scheduleModalTitle').innerHTML = '<i class="fas fa-clock"></i> Add Schedule';
+    document.getElementById('editScheduleId').value = '';
+    document.getElementById('schedTarget').value = '';
+    document.getElementById('schedTime').value = '12:00';
+    document.getElementById('schedRepeat').value = 'daily';
+    scheduleEditItems = [];
+    renderScheduleItems();
+    loadScheduleAccountSelect();
+    openModal('scheduleModal');
+}
+
+function editSchedule(id) {
+    const sched = scheduleList.find(s => s.id === id);
+    if (!sched) return;
+    document.getElementById('scheduleModalTitle').innerHTML = '<i class="fas fa-clock"></i> Edit Schedule';
+    document.getElementById('editScheduleId').value = id;
+    document.getElementById('schedTarget').value = sched.target;
+    document.getElementById('schedTime').value = sched.time;
+    document.getElementById('schedRepeat').value = sched.repeat;
+    scheduleEditItems = [...(sched.items || [])];
+    renderScheduleItems();
+    loadScheduleAccountSelect().then(() => {
+        document.getElementById('schedAccount').value = sched.account;
+    });
+    openModal('scheduleModal');
+}
+
+function loadScheduleAccountSelect() {
+    const select = document.getElementById('schedAccount');
+    select.innerHTML = accounts.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
+}
+
+function addScheduleItem() {
+    const name = document.getElementById('schedItemName').value.trim();
+    const qty = parseInt(document.getElementById('schedItemQty').value) || 100;
+    if (!name) { showToast('Input item name', 'warning'); return; }
+    scheduleEditItems.push({name, id: name, category: 'Seeds', qty});
+    document.getElementById('schedItemName').value = '';
+    renderScheduleItems();
+}
+
+function removeScheduleItem(idx) {
+    scheduleEditItems.splice(idx, 1);
+    renderScheduleItems();
+}
+
+function renderScheduleItems() {
+    const container = document.getElementById('schedItemsList');
+    container.innerHTML = scheduleEditItems.map((item, i) => `
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:12px">
+            <span style="flex:1">${esc(item.name)} x${item.qty}</span>
+            <button class="btn btn-sm btn-danger" onclick="removeScheduleItem(${i})" style="padding:2px 6px"><i class="fas fa-times"></i></button>
+        </div>
+    `).join('');
+}
+
+async function saveSchedule() {
+    const id = document.getElementById('editScheduleId').value;
+    const account = document.getElementById('schedAccount').value;
+    const target = document.getElementById('schedTarget').value.trim();
+    const time = document.getElementById('schedTime').value;
+    const repeat = document.getElementById('schedRepeat').value;
+    if (!account || !target) { showToast('Fill account and target', 'warning'); return; }
+    if (scheduleEditItems.length === 0) { showToast('Add at least 1 item', 'warning'); return; }
+    const data = {account, target, items: scheduleEditItems, time, repeat};
+    try {
+        if (id) {
+            await api('PUT', `/api/schedule/${id}`, data);
+        } else {
+            await api('POST', '/api/schedule/create', data);
+        }
+        closeModal('scheduleModal');
+        await loadSchedules();
+        showToast('Schedule saved!', 'success');
+    } catch (e) {
+        showToast('Error saving schedule', 'error');
+    }
+}
+
+async function toggleSchedule(id, enabled) {
+    try {
+        await api('POST', '/api/schedule/toggle', {id, enabled});
+        await loadSchedules();
+    } catch (e) {
+        showToast('Error toggling schedule', 'error');
+    }
+}
+
+async function deleteSchedule(id) {
+    if (!confirm('Delete this schedule?')) return;
+    try {
+        await api('DELETE', `/api/schedule/${id}`);
+        await loadSchedules();
+        showToast('Schedule deleted', 'success');
+    } catch (e) {
+        showToast('Error deleting schedule', 'error');
+    }
+}
+
+async function loadScheduleHistory() {
+    try {
+        const resp = await api('GET', '/api/schedule/history');
+        if (resp) {
+            scheduleHistoryList = resp.history || [];
+            renderScheduleHistory();
+        }
+    } catch (e) {
+        showToast('Error loading history', 'error');
+    }
+}
+
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initMailbox, 1000);

@@ -61,6 +61,8 @@ def check_auth():
 
 if __name__ == '__main__':
     load_data()
+    from blueprints.misc import start_scheduler
+    start_scheduler()
     if IS_TERMUX:
         serials = settings.get('mumu_serials', ['127.0.0.1:5555'])
         if not serials or not serials[0]:
