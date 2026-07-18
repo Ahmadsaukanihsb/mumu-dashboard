@@ -214,10 +214,19 @@ class RootMonitor:
             f.write(script)
         results = []
         for pkg in self.packages:
-            dest = f'/data/data/{pkg}/files/Delta/Autoexecute/monitor.luau'
-            code, out = self.su_cmd(f'cp {tmp} {dest}')
-            success = code == 0
-            print(f'[{pkg}] Push script: {"OK" if success else "FAILED: " + out}')
+            dest_paths = [
+                f'/sdcard/Delta/Autoexecute/monitor.luau',
+                f'/sdcard/Android/data/{pkg}/files/Delta/Autoexecute/monitor.luau',
+            ]
+            success = False
+            for dest in dest_paths:
+                code, out = self.su_cmd(f'mkdir -p "$(dirname {dest})" && cp {tmp} {dest}')
+                if code == 0:
+                    success = True
+                    print(f'[{pkg}] Push script: OK -> {dest}')
+                    break
+            if not success:
+                print(f'[{pkg}] Push script: FAILED')
             results.append({'package': pkg, 'success': success})
         try: os.remove(tmp)
         except: pass
