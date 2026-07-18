@@ -309,136 +309,80 @@ def mumu_health():
 @mumu_bp.route('/api/mumu/scan', methods=['GET'])
 def mumu_scan():
     adb = find_adb()
-    
-    # Get list of ALL MuMu VMs
-    code, out = mumu_vm_cmd(['list', 'vms'])
-    all_vms = []
-    if code == 0:
-        for line in out.split('\n'):
-            line = line.strip()
-            if 'MuMuPlayerGlobal' in line:
-                parts = line.split('{')
-                if len(parts) > 1:
-                    vm_name = parts[0].strip().strip('"')
-                    uid = '{' + parts[1]
-                    m = re.search(r'MuMuPlayerGlobal-12\.0-(\d+)', vm_name)
-                    if m:
-                        idx = int(m.group(1))
-                        all_vms.append({'name': vm_name, 'uid': uid, 'index': idx})
-    
-    # Get running VMs
-    running_vms = set()
-    code2, out2 = mumu_vm_cmd(['list', 'runningvms'])
-    if code2 == 0:
-        for line in out2.split('\n'):
-            line = line.strip()
-            if 'MuMuPlayerGlobal' in line:
-                m = re.search(r'MuMuPlayerGlobal-12\.0-(\d+)', line)
-                if m:
-                    running_vms.add(int(m.group(1)))
-    
-    # Read MAC addresses from MuMu VM config
-    vm_base = find_mumu_vms_dir()
-    mac_to_idx = {}
-    if os.path.isdir(vm_base):
-        for entry in os.listdir(vm_base):
-            m2 = re.match(r'MuMuPlayerGlobal-12\.0-(\d+)$', entry)
-            if not m2:
-                continue
-            mac_path = os.path.join(vm_base, entry, 'macaddress')
-            try:
-                with open(mac_path, 'r') as f:
-                    mac = f.read().strip().lower().replace(':', '').replace('-', '')
-                    mac_to_idx[mac] = m2.group(1)
-            except:
-                pass
-    
-    # Get ARP table (IP -> MAC mapping)
-    ip_to_mac = {}
-    try:
-        r = subprocess.run(['arp', '-a'], capture_output=True, text=True, timeout=5)
-        for line in r.stdout.split('\n'):
-            parts = line.strip().split()
-            if len(parts) >= 2 and parts[0].count('.') == 3:
-                ip = parts[0]
-                mac = parts[1].replace('-', '').lower()
-                ip_to_mac[ip] = mac
-    except:
-        pass
-    
-    # Get ADB devices
-    adb_devices = {}
-    if adb:
+    vms_dir = find_mumu_vms_dir()
+    serials = list(settings.get('mumu_serials', []))
+    found = []
+
+    if not os.path.isdir(vms_dir):
+        return jsonify({'error': f'VMs directory not found: {vms_dir}', 'devices': [], 'mumu_serials': serials})
+
+    # Scan all VM directories
+    for entry in sorted(os.listdir(vms_dir)):
+        m = re.match(r'MuMuPlayerGlobal-12\.0-(\d+)$', entry)
+        if not m:
+            continue
+        idx = int(m.group(1))
+        vm_path = os.path.join(vms_dir, entry)
+
+        # Read guest_ip from vm_config.json
+        guest_ip = None
+        config_path = os.path.join(vm_path, 'configs', 'vm_config.json')
         try:
-            r = subprocess.run([adb, 'devices'], capture_output=True, text=True, timeout=5)
-            for l in r.stdout.strip().split('\n')[1:]:
-                parts = l.strip().split('\t')
-                if len(parts) >= 2 and parts[1] == 'device':
-                    ip_port = parts[0]
-                    ip = ip_port.split(':')[0]
-                    adb_devices[ip] = ip_port
+            with open(config_path, 'r', encoding='utf-8') as f:
+                vm_config = json.load(f)
+            guest_ip = vm_config.get('vm', {}).get('nat', {}).get('port_forward', {}).get('adb', {}).get('guest_ip')
         except:
             pass
-    
-    # Setup serials
-    max_idx = max([vm['index'] for vm in all_vms], default=5) if all_vms else 5
-    serials = list(settings.get('mumu_serials', []))
-    while len(serials) <= max_idx:
-        serials.append('')
-    
-    # Match MAC to IP using ARP table
-    for ip, mac in ip_to_mac.items():
-        if mac in mac_to_idx:
-            idx = int(mac_to_idx[mac])
-            if idx < len(serials) and ip in adb_devices:
-                serials[idx] = adb_devices[ip]
-    
-    # Try to connect to running VMs that don't have serials yet
-    if adb:
-        for vm in all_vms:
-            idx = vm['index']
-            if idx in running_vms and (idx >= len(serials) or not serials[idx]):
-                # Try common MuMu ports
-                for port in range(7555, 7561):
-                    serial = f'127.0.0.1:{port}'
-                    try:
-                        conn = subprocess.run([adb, 'connect', serial], capture_output=True, text=True, timeout=3)
-                        if 'connected' in conn.stdout.lower():
-                            check = subprocess.run([adb, '-s', serial, 'shell', 'echo', 'ok'], capture_output=True, text=True, timeout=3)
-                            if check.returncode == 0 and 'ok' in check.stdout.lower():
-                                # Check if this serial is already used by another VM
-                                if serial not in serials:
-                                    serials[idx] = serial
-                                    break
-                    except:
-                        pass
-    
+
+        # Read display name from extra_config.json
+        display_name = f'VM-{idx}'
+        extra_path = os.path.join(vm_path, 'configs', 'extra_config.json')
+        try:
+            with open(extra_path, 'r', encoding='utf-8') as f:
+                extra = json.load(f)
+            display_name = extra.get('playerName', display_name)
+        except:
+            pass
+
+        # Build serial and try ADB connect
+        serial = f'{guest_ip}:5555' if guest_ip else ''
+        connected = False
+        if serial and adb:
+            ok, _ = adb_connect(serial)
+            connected = ok
+            if not connected:
+                # Try without port
+                serial_no_port = guest_ip
+                ok2, _ = adb_connect(serial_no_port)
+                if ok2:
+                    serial = serial_no_port
+                    connected = True
+
+        # Ensure serials array is long enough
+        while len(serials) <= idx:
+            serials.append('')
+        if connected:
+            serials[idx] = serial
+        elif not serials[idx]:
+            serials[idx] = ''
+
+        found.append({
+            'instance': idx,
+            'name': display_name,
+            'serial': serial if connected else '',
+            'guest_ip': guest_ip,
+            'running': connected
+        })
+
     # Save to settings
     settings['mumu_serials'] = serials
     save_data()
-    
-    # Return ALL VMs with their status
-    found = []
-    for vm in all_vms:
-        idx = vm['index']
-        is_running = idx in running_vms
-        serial = serials[idx] if idx < len(serials) else ''
-        vm_key = f'MuMuPlayerGlobal-12.0-{idx}'
-        dn = load_vm_display_names().get(vm_key, f'VM-{idx}')
-        found.append({
-            'instance': idx,
-            'name': dn,
-            'vm_name': vm['name'],
-            'serial': serial,
-            'running': is_running,
-            'connected': bool(serial)
-        })
-    
+
     return jsonify({
         'devices': found,
         'mumu_serials': serials,
-        'total_vms': len(all_vms),
-        'running_vms': len(running_vms)
+        'total_vms': len(found),
+        'connected': sum(1 for d in found if d['running'])
     })
 
 @mumu_bp.route('/api/mumu/discover-packages', methods=['GET'])
