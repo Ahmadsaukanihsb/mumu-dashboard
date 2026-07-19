@@ -43,7 +43,7 @@ def build_join_link(sv):
         code = sv.get('server_code', '')
         if code:
             import urllib.parse
-            return f'https://www.roblox.com/share?code={urllib.parse.quote(code)}&type=Server'
+            return f'roblox://experiences/start?placeId={base}&linkCode={urllib.parse.quote(code)}'
     return f'roblox://placeId={base}'
 
 def _adb_extract_cookie(serial):

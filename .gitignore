@@ -1,7 +1,20 @@
+# Data files
 data.json
 data.json.bak
+data.json.bak2
+
+# Python
 __pycache__/
 *.pyc
 .env
+
+# Logs
+logs/
+
+# Assets (screenshots, debug media)
+assets/
+
+# Misc
 *.txt
 .playwright-mcp/
+.kilo/

@@ -453,7 +453,7 @@ function updateAccountsTable() {
     tbody.innerHTML = accounts.map(a => {
         const aj = a.auto_join;
         const allSvs = (a.server_ids || []).map(id => servers.find(s => s.id === id)).filter(Boolean);
-        const inst = (a.mumu_instance != null) ? a.mumu_instance : '-';
+        const inst = (a.mumu_instance != null && a.mumu_instance !== undefined) ? a.mumu_instance : '-';
         const vmLabel = getVmDisplayName(inst);
         const displayName = a.app_label ? `${a.app_label}` : a.name;
         const subName = a.package_name ? `<span style="font-size:10px;color:var(--text-muted);font-family:monospace">${esc(a.package_name)}</span>` : '';
@@ -461,7 +461,7 @@ function updateAccountsTable() {
         <tr>
             <td><strong style="cursor:pointer;color:var(--accent-1)" onclick="showAccountProfile('${a.id}')">${esc(displayName)} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:0.5"></i></strong>${subName ? '<br>' + subName : ''}</td>
             <td>${getStatusBadge(a.status)}${renderDeltaKeyIcon(a)} <span class="countdown"${a.next_rejoin_in != null ? ` data-seconds="${a.next_rejoin_in}"` : ''} style="font-size:10px;color:var(--text-muted)"><i class="fas fa-history"></i> <span class="cd-time">${formatCountdown(a.next_rejoin_in)}</span></span></td>
-            <td>${a.package_name ? `<span class="badge badge-info" title="${esc(a.package_name)}">Cloudphone</span>` : `<span class="badge badge-info">${vmLabel}</span>`}</td>
+            <td>${a.package_name ? `<span class="badge badge-info" title="${esc(a.package_name)}">Cloudphone</span> <span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">${esc(a.device_id || '')}</span>` : `<span class="badge badge-info">${vmLabel}</span>`}</td>
             <td style="font-size:11px">
                 ${allSvs.length ? allSvs.map(s =>
                     s.id === a.server_id

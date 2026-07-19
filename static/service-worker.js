@@ -3,9 +3,7 @@ const STATIC_ASSETS = [
   '/',
   '/static/style.css',
   '/static/script.js',
-  '/static/manifest.json',
-  '/static/icons/icon-192x192.png',
-  '/static/icons/icon-512x512.png'
+  '/static/manifest.json'
 ];
 
 const API_CACHE = 'roblox-dashboard-api-v1';
@@ -15,7 +13,7 @@ const API_ROUTES = ['/api/summary', '/api/inventory', '/api/item-thumbnails'];
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(cache => cache.addAll(STATIC_ASSETS).catch(() => {}))
       .then(() => self.skipWaiting())
   );
 });
@@ -87,8 +85,8 @@ self.addEventListener('push', event => {
   const title = data.title || 'Dashboard Roblox';
   const options = {
     body: data.body || 'New notification',
-    icon: '/static/icons/icon-192x192.png',
-    badge: '/static/icons/icon-72x72.png',
+    icon: '/static/icons/icon-192x192.svg',
+    badge: '/static/icons/icon-72x72.svg',
     vibrate: [100, 50, 100],
     data: {
       url: data.url || '/'

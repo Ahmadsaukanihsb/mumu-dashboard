@@ -1,0 +1,19 @@
+{
+  "found": [
+    {
+      "text": "Receive",
+      "target": "receive",
+      "x": 743,
+      "y": 345,
+      "w": 77,
+      "h": 15,
+      "cx": 781,
+      "cy": 352,
+      "conf": 96
+    }
+  ],
+  "image_size": [
+    960,
+    540
+  ]
+}

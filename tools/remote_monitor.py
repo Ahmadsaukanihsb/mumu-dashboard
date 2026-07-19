@@ -109,9 +109,8 @@ class RootMonitor:
     def start_join_intent(self, package, link):
         self.force_stop(package)
         time.sleep(3)
-        code, out = self.su_cmd(
-            f"am start -a android.intent.action.VIEW -d '{link}' -p {package}"
-        )
+        cmd = f"am start -a android.intent.action.VIEW -d '{link}' -p {package}"
+        code, out = self.su_cmd(cmd)
         return code == 0
 
     def detect_kicked(self, package='com.roblox.client'):
@@ -479,7 +478,7 @@ class RootMonitor:
                 return None
         if server_code:
             import urllib.parse
-            return f'https://www.roblox.com/share?code={urllib.parse.quote(server_code)}&type=Server'
+            return f'roblox://experiences/start?placeId={place_id}&linkCode={urllib.parse.quote(server_code)}'
         return f'roblox://placeId={place_id}'
 
     def _check_mailbox_commands(self, account_name):
@@ -491,13 +490,25 @@ class RootMonitor:
             cmd_type = cmd.get('type', '')
             print(f'[{account_name}] Executing: {cmd_type} ({cmd_id})')
             try:
-                if cmd_type == 'send_mail':
+                if cmd_type == 'join':
+                    self._execute_join_command(account_name, cmd)
+                elif cmd_type == 'send_mail':
                     self._execute_mailbox_send(account_name, cmd)
                 elif cmd_type == 'send_gift':
                     self._execute_gift(account_name, cmd)
                 self.complete_command(cmd_id, True, 'Executed')
             except Exception as e:
                 self.complete_command(cmd_id, False, str(e))
+
+    def _execute_join_command(self, account_name, cmd):
+        package = cmd.get('package', '')
+        link = cmd.get('link', '')
+        if not package or not link:
+            print(f'[{account_name}] Join command missing package or link')
+            return
+        print(f'[{account_name}] JOIN → {link[:80]}...')
+        self.start_join_intent(package, link)
+        self.report_status(account_name, package, 'rejoining')
 
     def _execute_mailbox_send(self, account_name, cmd):
         target_id = cmd.get('target_id', 0)

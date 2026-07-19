@@ -71,19 +71,19 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "url": "/",
-      "icons": [{"src": "/static/icons/icon-96x96.png", "sizes": "96x96"}]
+      "icons": [{"src": "/static/icons/icon-96x96.svg", "sizes": "96x96"}]
     },
     {
       "name": "Inventory",
       "short_name": "Inventory",
       "url": "/",
-      "icons": [{"src": "/static/icons/icon-96x96.png", "sizes": "96x96"}]
+      "icons": [{"src": "/static/icons/icon-96x96.svg", "sizes": "96x96"}]
     },
     {
       "name": "VMs",
       "short_name": "VMs",
       "url": "/",
-      "icons": [{"src": "/static/icons/icon-96x96.png", "sizes": "96x96"}]
+      "icons": [{"src": "/static/icons/icon-96x96.svg", "sizes": "96x96"}]
     }
   ]
 }

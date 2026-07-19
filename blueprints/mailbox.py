@@ -2,7 +2,7 @@ import json, time, threading
 import urllib.request, urllib.error
 from flask import Blueprint, jsonify, request
 from models import settings, inventory_data, harvested_fruits_data, accounts, log_activity
-from fruit_values import FRUIT_VALUES, calculate_fruits_for_value, format_value
+from tools.fruit_values import FRUIT_VALUES, calculate_fruits_for_value, format_value
 
 mailbox_bp = Blueprint('mailbox', __name__)
 
@@ -183,7 +183,7 @@ def get_harvest_fruits_value():
     total_value = sum(f.get('totalValue', f.get('value', 0)) for f in fruits)
     total_count = sum(f.get('count', 1) for f in fruits)
     
-    from fruit_values import MUTATION_MULTIPLIERS
+    from tools.fruit_values import MUTATION_MULTIPLIERS
     for f in fruits:
         mut = f.get('mutation', 'None')
         f['mutation_multiplier'] = MUTATION_MULTIPLIERS.get(mut, 1)

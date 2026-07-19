@@ -4,7 +4,7 @@ from flask_cors import CORS
 
 from config import FLASK_SECRET, AUTH_PASSWORD_KEY, PUBLIC_ROUTES, HOST, PORT, IS_TERMUX
 from models import settings, load_data, discover_roblox_packages_on_start
-from monitor import start_monitor
+from tools.monitor import start_monitor
 
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET
@@ -20,6 +20,11 @@ from blueprints.mumu import mumu_bp
 from blueprints.misc import misc_bp
 from blueprints.farm import farm_bp
 from blueprints.mailbox import mailbox_bp
+from blueprints.inventory import inventory_bp
+from blueprints.seed_shop import seed_shop_bp
+from blueprints.remote import remote_bp
+from blueprints.join import join_bp
+from blueprints.inject import inject_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(accounts_bp)
@@ -30,6 +35,11 @@ app.register_blueprint(mumu_bp)
 app.register_blueprint(misc_bp)
 app.register_blueprint(farm_bp)
 app.register_blueprint(mailbox_bp)
+app.register_blueprint(inventory_bp)
+app.register_blueprint(seed_shop_bp)
+app.register_blueprint(remote_bp)
+app.register_blueprint(join_bp)
+app.register_blueprint(inject_bp)
 
 @app.after_request
 def no_cache(response):
@@ -61,7 +71,7 @@ def check_auth():
 
 if __name__ == '__main__':
     load_data()
-    from blueprints.misc import start_scheduler
+    from models import start_scheduler
     start_scheduler()
     if IS_TERMUX:
         serials = settings.get('mumu_serials', ['127.0.0.1:5555'])
