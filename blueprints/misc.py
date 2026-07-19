@@ -1472,21 +1472,24 @@ remote_monitors = {}
 @misc_bp.route('/api/remote/register', methods=['POST'])
 def remote_register():
     data = request.json or {}
+    device_id = data.get('device_id', '')
     serial = data.get('serial', '')
     packages = data.get('packages', [])
-    if not serial or not packages:
-        return jsonify({'error': 'serial and packages required'}), 400
+    if not device_id or not packages:
+        return jsonify({'error': 'device_id and packages required'}), 400
 
-    existing_pkgs = {acc.get('package_name') for acc in accounts}
+    existing_pkgs = {(acc.get('device_id', ''), acc.get('package_name', '')) for acc in accounts}
     auto_created = []
 
     for pkg_info in packages:
         pkg = pkg_info.get('name', '')
         label = pkg_info.get('label', pkg.split('.')[-1])
-        if pkg and pkg not in existing_pkgs:
+        combo = (device_id, pkg)
+        if pkg and combo not in existing_pkgs:
+            acc_name = f"{label}-{device_id}" if device_id else label
             acc = {
-                'id': str(int(time.time() * 1000000) + hash(pkg) % 100000),
-                'name': label,
+                'id': str(int(time.time() * 1000000) + hash(f"{device_id}{pkg}") % 100000),
+                'name': acc_name,
                 'cookie': '',
                 'active': False,
                 'status': 'idle',
@@ -1495,6 +1498,7 @@ def remote_register():
                 'server_ids': [],
                 'mumu_instance': 0,
                 'package_name': pkg,
+                'device_id': device_id,
                 'app_label': label,
                 'auto_join': False,
                 'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -1503,24 +1507,26 @@ def remote_register():
             with _data_lock:
                 accounts.append(acc)
             auto_created.append(pkg)
-            log_activity(f'Auto-created account: {label} ({pkg})')
+            log_activity(f'Auto-created account: {acc_name} ({pkg})')
 
     if auto_created:
         save_data()
 
     account_map = {}
     for acc in accounts:
-        pkg = acc.get('package_name', '')
-        if pkg:
-            account_map[pkg] = acc.get('name', pkg)
+        if acc.get('device_id') == device_id:
+            pkg = acc.get('package_name', '')
+            if pkg:
+                account_map[pkg] = acc.get('name', pkg)
 
-    remote_monitors[serial] = {
+    remote_monitors[device_id] = {
+        'device_id': device_id,
         'serial': serial,
         'packages': [{'name': p.get('name', ''), 'label': p.get('label', '')} for p in packages],
         'registered_at': time.time(),
         'last_report': 0
     }
-    log_activity(f'Remote monitor registered: {serial} ({len(packages)} packages, {len(auto_created)} new)')
+    log_activity(f'Remote monitor registered: {device_id} ({len(packages)} packages, {len(auto_created)} new)')
     return jsonify({
         'success': True,
         'account_map': account_map,
@@ -1531,7 +1537,7 @@ def remote_register():
 @misc_bp.route('/api/remote/monitors', methods=['GET'])
 def remote_monitors_list():
     result = []
-    for serial, info in remote_monitors.items():
+    for device_id, info in remote_monitors.items():
         packages = info.get('packages', [])
         pkg_status = []
         for pkg_info in packages:
@@ -1543,7 +1549,7 @@ def remote_monitors_list():
                 label = pkg_info.get('label', pkg.split('.')[-1])
             matched_account = None
             for acc in accounts:
-                if acc.get('package_name') == pkg:
+                if acc.get('device_id') == device_id and acc.get('package_name') == pkg:
                     matched_account = acc.get('name', '')
                     break
             pkg_status.append({
@@ -1553,7 +1559,7 @@ def remote_monitors_list():
                 'has_account': bool(matched_account)
             })
         result.append({
-            'serial': serial,
+            'device_id': device_id,
             'packages': pkg_status,
             'registered_at': info.get('registered_at', 0),
             'package_count': len(packages)

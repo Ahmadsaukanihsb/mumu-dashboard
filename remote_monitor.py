@@ -29,6 +29,21 @@ class RootMonitor:
         self.running = False
         self.settings = {}
         self.has_root = self._check_root()
+        self.device_id = self._generate_device_id()
+        print(f'[DEVICE] Device ID: {self.device_id}')
+
+    def _generate_device_id(self):
+        import socket
+        try:
+            hostname = socket.gethostname()
+            if hostname and hostname != 'localhost':
+                return f"rf-{hostname}"
+        except:
+            pass
+        code, out = self.su_cmd('settings get secure android_id')
+        if code == 0 and out and out.strip() and out.strip() != 'null':
+            return f"rf-{out.strip()[:12]}"
+        return f"rf-{int(time.time()) % 100000}"
 
     def _check_root(self):
         try:
@@ -262,6 +277,7 @@ class RootMonitor:
             print(f'[MONITOR] Package: {pkg} → {label}')
             packages_data.append({'idx': i, 'name': pkg, 'label': label})
         data = {
+            'device_id': self.device_id,
             'serial': 'root',
             'packages': packages_data
         }
