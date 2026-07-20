@@ -354,7 +354,8 @@ class RootMonitor:
                         break
 
                     account_name = self.account_map.get(pkg, f'Unknown-{pkg}')
-                    auto_join_acc = account_settings.get(pkg, {}).get('auto_join', True)
+                    settings_key = f'{self.device_id}:{pkg}'
+                    auto_join_acc = account_settings.get(settings_key, account_settings.get(pkg, {})).get('auto_join', True)
 
                     if not auto_join_global or not auto_join_acc:
                         self.report_status(account_name, pkg, 'paused')
@@ -463,8 +464,10 @@ class RootMonitor:
                 if info == account_name:
                     pkg = p
                     break
-            if pkg and pkg in account_settings:
-                target_id = account_settings[pkg].get('server_id', '')
+            if pkg:
+                settings_key = f'{self.device_id}:{pkg}'
+                acct = account_settings.get(settings_key, account_settings.get(pkg, {}))
+                target_id = acct.get('server_id', '')
                 if target_id:
                     for s in servers:
                         if s.get('id') == target_id:

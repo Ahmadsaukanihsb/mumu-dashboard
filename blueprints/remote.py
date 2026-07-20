@@ -160,10 +160,13 @@ def remote_config():
     account_settings = {}
     for acc in accounts:
         pkg = acc.get('package_name', '')
-        if pkg:
-            account_settings[pkg] = {
+        did = acc.get('device_id', '')
+        if pkg and did:
+            key = f'{did}:{pkg}'
+            account_settings[key] = {
                 'auto_join': acc.get('auto_join', False),
-                'server_id': acc.get('server_id', '')
+                'server_id': acc.get('server_id', ''),
+                'account_name': acc.get('name', '')
             }
     return jsonify({
         'monitor_interval': settings.get('monitor_interval', 5),
