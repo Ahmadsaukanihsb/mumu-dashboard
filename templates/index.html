@@ -118,6 +118,9 @@
                 <a class="nav-item" data-page="vms" onclick="switchPage('vms')">
                     <i class="fas fa-desktop"></i><span>VMs</span>
                 </a>
+                <a class="nav-item" data-page="devices" onclick="switchPage('devices')">
+                    <i class="fas fa-mobile-alt"></i><span>Devices</span>
+                </a>
                 <a class="nav-item" data-page="scripts" onclick="switchPage('scripts')">
                     <i class="fas fa-code"></i><span>Scripts</span>
                 </a>
@@ -654,6 +657,18 @@
                                 <div id="vmAccountMap"><div class="empty-state" style="padding:20px"><i class="fas fa-spinner fa-pulse"></i> Loading...</div></div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Devices Page -->
+                <div class="page" id="page-devices">
+                    <div class="page-toolbar">
+                        <div class="page-toolbar-actions">
+                            <button class="btn btn-secondary" onclick="loadDevices()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                        </div>
+                    </div>
+                    <div id="devicesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">
+                        <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading devices...</div>
                     </div>
                 </div>
 

@@ -1,4 +1,4 @@
-import json, time
+import json, time, threading
 
 from flask import Blueprint, jsonify, request
 
@@ -9,6 +9,8 @@ remote_bp = Blueprint('remote', __name__)
 
 remote_monitors = {}
 device_health = {}
+_offline_notified = {}
+OFFLINE_THRESHOLD = 180
 
 @remote_bp.route('/api/remote/register', methods=['POST'])
 def remote_register():
@@ -116,7 +118,20 @@ def remote_cookie():
         return jsonify({'error': 'package and cookie required'}), 400
     for acc in accounts:
         if acc.get('package_name') == package:
-            if not acc.get('cookie') or acc['cookie'] == '':
+            old_cookie = acc.get('cookie', '')
+            if old_cookie and old_cookie != encrypt_cookie(cookie):
+                acc['cookie'] = encrypt_cookie(cookie)
+                acc['status'] = 'cookie_refreshed'
+                save_data()
+                send_webhook(
+                    f'🍪 Cookie Refreshed: {package}',
+                    f'Account: {acc.get("name", "?")}\nDevice: {acc.get("device_id", "?")}\nCookie lama diganti dengan baru.',
+                    0x3498db,
+                    acc.get('verified_avatar')
+                )
+                log_activity(f'Cookie refreshed for {package} -> {acc.get("name", "?")}')
+                return jsonify({'success': True, 'account': acc.get('name', ''), 'package': package, 'note': 'Cookie refreshed'})
+            elif not old_cookie or old_cookie == '':
                 acc['cookie'] = encrypt_cookie(cookie)
                 acc['status'] = 'cookie_ready'
                 save_data()
@@ -144,9 +159,10 @@ def remote_status():
             elif status in ('kicked', 'disconnected', 'error'):
                 acc['active'] = False
                 if status == 'kicked' and old_status != 'kicked':
+                    device_info = acc.get('device_id', 'unknown')
                     send_webhook(
-                        f'⚠️ {account_name} — KICKED (Remote)',
-                        f'Package: {package}\nKicked: {kicked or "unknown"}',
+                        f'⚠️ {account_name} — KICKED (Cloudphone)',
+                        f'Package: {package}\nDevice: {device_info}\nKicked: {kicked or "unknown"}',
                         0xffaa00,
                         acc.get('verified_avatar')
                     )
@@ -223,6 +239,7 @@ def remote_health():
     device_health[did] = health
     if remote_monitors.get(did):
         remote_monitors[did]['last_report'] = time.time()
+    _offline_notified.pop(did, None)
     return jsonify({'success': True})
 
 
@@ -284,3 +301,66 @@ def reset_account(acc_id):
     log_account(acc['id'], acc['name'], f'Reset command queued → {acc["package_name"]}')
     log_activity(f'[{acc["name"]}] Reset app queued')
     return jsonify({'success': True, 'command_id': cmd_id, 'message': f'Reset queued for {acc["package_name"]}'})
+
+
+@remote_bp.route('/api/remote/devices', methods=['GET'])
+def remote_devices():
+    now = time.time()
+    result = []
+    for did, info in remote_monitors.items():
+        packages = info.get('packages', [])
+        last_report = info.get('last_report', 0)
+        health = device_health.get(did, {})
+        is_online = (now - last_report) < OFFLINE_THRESHOLD if last_report > 0 else False
+        seconds_ago = int(now - last_report) if last_report > 0 else None
+        pkg_details = []
+        online_count = 0
+        for pkg_info in packages:
+            if isinstance(pkg_info, str):
+                pkg = pkg_info
+                label = pkg.split('.')[-1]
+            else:
+                pkg = pkg_info.get('name', '')
+                label = pkg_info.get('label', pkg.split('.')[-1])
+            acc = next((a for a in accounts if a.get('device_id') == did and a.get('package_name') == pkg), None)
+            acc_status = acc.get('status', 'idle') if acc else 'unassigned'
+            acc_active = acc.get('active', False) if acc else False
+            if acc_active:
+                online_count += 1
+            pkg_details.append({
+                'package': pkg,
+                'label': label,
+                'account': acc.get('name', '') if acc else '',
+                'status': acc_status,
+                'active': acc_active,
+                'has_cookie': bool(acc.get('cookie')) if acc else False
+            })
+        result.append({
+            'device_id': did,
+            'online': is_online,
+            'seconds_ago': seconds_ago,
+            'uptime': health.get('uptime'),
+            'memory': health.get('memory'),
+            'storage': health.get('storage'),
+            'battery': health.get('battery'),
+            'root': health.get('root'),
+            'packages': pkg_details,
+            'package_count': len(packages),
+            'online_count': online_count,
+            'registered_at': info.get('registered_at', 0)
+        })
+    offline_devices = []
+    for did, info in remote_monitors.items():
+        last = info.get('last_report', 0)
+        if last > 0 and (now - last) >= OFFLINE_THRESHOLD and did not in _offline_notified:
+            _offline_notified[did] = now
+            offline_devices.append(did)
+    if offline_devices:
+        for did in offline_devices:
+            send_webhook(
+                f'🔴 Device OFFLINE: {did}',
+                f'Device {did} tidak melakukan health report selama {int((now - remote_monitors[did].get("last_report", now)) // 60)} menit.',
+                0xff4444
+            )
+            log_activity(f'[Webhook] Device {did} marked OFFLINE')
+    return jsonify({'devices': result, 'count': len(result), 'online': sum(1 for d in result if d['online'])})

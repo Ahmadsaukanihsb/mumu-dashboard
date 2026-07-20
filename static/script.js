@@ -113,6 +113,7 @@ function switchPage(page) {
         activity: { title: 'Activity', icon: 'history' },
         settings: { title: 'Settings', icon: 'cog' },
         vms: { title: 'VMs', icon: 'desktop' },
+        devices: { title: 'Devices', icon: 'mobile-alt' },
         scripts: { title: 'Scripts', icon: 'code' },
         logs: { title: 'Logs', icon: 'clipboard-list' },
         inventory: { title: 'Inventory', icon: 'box-open' },
@@ -126,6 +127,7 @@ function switchPage(page) {
     if (page === 'dashboard') { refreshAllScreenshots(); }
     if (page === 'scripts') loadScript();
     if (page === 'vms') { refreshMuMuVMs(); }
+    if (page === 'devices') { startDevicesAutoRefresh(); } else { stopDevicesAutoRefresh(); }
     if (page === 'inventory') { refreshInventory(); }
     if (page === 'command') { initMailbox(); }
     if (page === 'logs') {
@@ -2018,6 +2020,96 @@ async function copyScript() {
         document.execCommand('copy');
         window.getSelection().removeAllRanges();
     }
+}
+
+// ==================== DEVICES ====================
+
+let _devicesAutoRefresh = null;
+
+async function loadDevices() {
+    const grid = document.getElementById('devicesGrid');
+    if (!grid) return;
+    const res = await api('GET', '/api/remote/devices');
+    if (!res || !res.devices || res.devices.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-mobile-alt"></i> Belum ada Cloudphone device terdaftar<br><small style="color:var(--text-muted)">Jalankan remote_monitor.py di Termux</small></div>';
+        return;
+    }
+    grid.innerHTML = res.devices.map(d => {
+        const mem = d.memory || {};
+        const sto = d.storage || {};
+        const bat = d.battery || {};
+        const up = d.uptime || {};
+        const timeAgo = d.seconds_ago != null ? (d.seconds_ago < 60 ? d.seconds_ago + 's ago' : Math.floor(d.seconds_ago / 60) + 'm ago') : 'never';
+        return `
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div style="width:36px;height:36px;border-radius:8px;background:${d.online ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'};display:flex;align-items:center;justify-content:center">
+                        <i class="fas fa-mobile-alt" style="color:${d.online ? 'var(--green)' : 'var(--red)'}"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:600;font-size:13px">${esc(d.device_id)}</div>
+                        <div style="font-size:10px;color:var(--text-muted)">${timeAgo}</div>
+                    </div>
+                </div>
+                <span style="padding:3px 8px;border-radius:10px;font-size:10px;font-weight:600;background:${d.online ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'};color:${d.online ? 'var(--green)' : 'var(--red)'}">${d.online ? 'ONLINE' : 'OFFLINE'}</span>
+            </div>
+            ${d.online ? `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;font-size:11px">
+                <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px">
+                    <div style="color:var(--text-muted);margin-bottom:2px"><i class="fas fa-clock"></i> Uptime</div>
+                    <div style="font-weight:600">${esc(up.formatted || '-')}</div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px">
+                    <div style="color:var(--text-muted);margin-bottom:2px"><i class="fas fa-microchip"></i> Root</div>
+                    <div style="font-weight:600">${d.root ? 'Yes' : 'No'}</div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px">
+                    <div style="color:var(--text-muted);margin-bottom:2px"><i class="fas fa-memory"></i> RAM</div>
+                    <div style="font-weight:600">${mem.used_mb || 0}/${mem.total_mb || 0} MB</div>
+                    <div style="margin-top:3px;height:3px;background:var(--border-color);border-radius:2px;overflow:hidden">
+                        <div style="width:${mem.used_percent||0}%;height:100%;background:${(mem.used_percent||0)>80?'var(--red)':(mem.used_percent||0)>60?'var(--yellow)':'var(--green)'};border-radius:2px"></div>
+                    </div>
+                </div>
+                <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px">
+                    <div style="color:var(--text-muted);margin-bottom:2px"><i class="fas fa-hdd"></i> Storage</div>
+                    <div style="font-weight:600">${sto.used_gb || 0}/${sto.total_gb || 0} GB</div>
+                    <div style="margin-top:3px;height:3px;background:var(--border-color);border-radius:2px;overflow:hidden">
+                        <div style="width:${sto.used_percent||0}%;height:100%;background:${(sto.used_percent||0)>90?'var(--red)':(sto.used_percent||0)>70?'var(--yellow)':'var(--green)'};border-radius:2px"></div>
+                    </div>
+                </div>
+                ${bat.level != null ? `
+                <div style="padding:6px 8px;background:var(--bg-input);border-radius:5px;grid-column:span 2">
+                    <div style="color:var(--text-muted);margin-bottom:2px"><i class="fas fa-battery-${bat.level>70?'full':bat.level>30?'half':'quarter'}"></i> Battery</div>
+                    <div style="font-weight:600">${bat.level}% ${bat.status||''} ${bat.temperature_c ? '| '+bat.temperature_c+'°C' : ''}</div>
+                </div>` : ''}
+            </div>` : ''}
+            <div style="border-top:1px solid var(--border-color);padding-top:10px">
+                <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px">PACKAGES (${d.online_count || 0}/${d.package_count || 0} active)</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">
+                    ${(d.packages || []).map(p => {
+                        const statusColor = p.active ? 'var(--green)' : p.has_cookie ? 'var(--yellow)' : 'var(--text-muted)';
+                        const statusIcon = p.active ? 'fa-gamepad' : p.has_cookie ? 'fa-cookie-bite' : 'fa-circle';
+                        return `<div style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;background:var(--bg-input);border:1px solid var(--border-color)" title="${esc(p.package)}\nStatus: ${esc(p.status)}">
+                            <i class="fas ${statusIcon}" style="color:${statusColor};font-size:8px"></i>
+                            <span>${esc(p.label)}</span>
+                            ${p.account ? `<span style="color:var(--text-muted);font-size:9px">${esc(p.account.split('-')[0])}</span>` : ''}
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function startDevicesAutoRefresh() {
+    stopDevicesAutoRefresh();
+    loadDevices();
+    _devicesAutoRefresh = setInterval(loadDevices, 15000);
+}
+
+function stopDevicesAutoRefresh() {
+    if (_devicesAutoRefresh) { clearInterval(_devicesAutoRefresh); _devicesAutoRefresh = null; }
 }
 
 // ==================== SCRIPT TABS ====================
