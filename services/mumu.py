@@ -197,7 +197,6 @@ def _launch_mumu(acc, link, sv):
 
 
 def mumu_rollback(acc, sv):
-    from services.adb import get_serial, adb_connect, adb_force_stop_roblox, adb_cmd
     name = acc.get('name', '?')
     instance = acc.get('mumu_instance')
     serial = None

@@ -2,6 +2,7 @@
 data.json
 data.json.bak
 data.json.bak2
+data.json.tmp
 
 # Python
 __pycache__/
