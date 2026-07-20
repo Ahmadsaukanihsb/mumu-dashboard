@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, Response
 from models import settings, accounts, servers, _data_lock, log_activity, log_account, save_data
 from services.adb import find_adb, adb_connect, adb_check_roblox, adb_force_stop_roblox, adb_cmd, adb_screenshot, adb_check_join_failed, adb_dismiss_dialogs
 from services.mumu import find_mumu_vmm, mumu_vm_cmd, load_vm_display_names, ensure_vm_running, find_mumu_vms_dir
-from services.roblox import build_join_link  # Bug #9 fix: import dari sumber tunggal services/roblox.py
+from services.roblox import build_public_link
 from services.webhook import send_webhook
 
 mumu_bp = Blueprint('mumu', __name__)
@@ -165,7 +165,7 @@ def mumu_start_all_and_join():
                 if not sv and servers:
                     sv = servers[0]
                 if sv:
-                    link = build_join_link(sv)
+                    link = build_public_link(sv)
                     adb_force_stop_roblox(serial)
                     time.sleep(3)
                     adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'", '-p', 'com.roblox.client'], serial)

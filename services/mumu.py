@@ -3,7 +3,7 @@ import os, json, time, subprocess, threading, re
 from models import settings, accounts, servers, _data_lock, log_activity, log_account, save_data, get_package_name
 from services.adb import find_adb, get_serial, adb_connect, adb_force_stop_roblox, adb_cmd, adb_dismiss_dialogs, adb_check_join_failed, adb_check_roblox, auto_push_script_to_vm
 from services.webhook import send_webhook
-from services.roblox import build_join_link
+from services.roblox import build_public_link
 from config import IS_TERMUX
 
 def find_mumu_vmm():
@@ -109,7 +109,7 @@ def send_join_intent(acc, serial):
         sv = servers[0]
     if not sv:
         return False
-    link = build_join_link(sv)
+    link = build_public_link(sv)
     if not link:
         return False
     log_account(acc.get('id', ''), acc.get('name', '?'), f'Opening: {link[:80]}')
@@ -162,7 +162,7 @@ def _launch_mumu(acc, link, sv):
         try:
             if attempt > 0:
                 time.sleep(delay)
-            url = build_join_link(sv)
+            url = build_public_link(sv)
             adb_force_stop_roblox(serial)
             time.sleep(3)
             code, out = adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{url}'"], serial)
@@ -194,5 +194,40 @@ def _launch_mumu(acc, link, sv):
     acc['active'] = False
     acc['status'] = 'error'
     save_data()
+
+
+def mumu_rollback(acc, sv):
+    from services.adb import get_serial, adb_connect, adb_force_stop_roblox, adb_cmd
+    name = acc.get('name', '?')
+    instance = acc.get('mumu_instance')
+    serial = None
+    if instance is not None:
+        serial = get_serial(instance)
+    if not serial:
+        serial = acc.get('serial', '')
+    if not serial:
+        log_activity(f'[{name}] Rollback skipped: no serial')
+        return None
+    ok, msg = adb_connect(serial)
+    if not ok:
+        log_activity(f'[{name}] Rollback ADB connect failed: {msg}')
+        return None
+    link = build_public_link(sv)
+    if not link:
+        log_activity(f'[{name}] Rollback failed: no join link')
+        return None
+    try:
+        adb_force_stop_roblox(serial)
+        time.sleep(2)
+        adb_cmd(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', f"'{link}'"], serial)
+        with _data_lock:
+            acc['status'] = 'rollback'
+        log_account(acc.get('id', ''), name, f'Rollback: force-stop + rejoin ke {sv["name"]}')
+        log_activity(f'[{name}] Rollback executed (force-stop + rejoin)')
+        save_data()
+        return link
+    except Exception as e:
+        log_activity(f'[{name}] Rollback error: {e}')
+        return None
 
 

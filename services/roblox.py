@@ -35,7 +35,7 @@ def verify_cookie(cookie):
     except Exception as e:
         return {'valid': False, 'error': str(e)}
 
-def build_join_link(sv, cookie=None, for_cloudphone=False):
+def build_deep_link(sv):
     base = sv.get('place_id', '')
     if not base:
         return None
@@ -43,10 +43,19 @@ def build_join_link(sv, cookie=None, for_cloudphone=False):
         code = sv.get('server_code', '')
         if code:
             import urllib.parse
-            if for_cloudphone:
-                return f'roblox://experiences/start?placeId={base}&linkCode={urllib.parse.quote(code)}'
-            return f'https://www.roblox.com/share?code={urllib.parse.quote(code)}&type=Server'
+            return f'roblox://experiences/start?placeId={base}&linkCode={urllib.parse.quote(code)}'
     return f'roblox://placeId={base}'
+
+def build_public_link(sv):
+    base = sv.get('place_id', '')
+    if not base:
+        return None
+    if sv.get('type') == 'private':
+        code = sv.get('server_code', '')
+        if code:
+            import urllib.parse
+            return f'https://www.roblox.com/share?code={urllib.parse.quote(code)}&type=Server'
+    return f'https://www.roblox.com/games/start?placeId={base}'
 
 def _adb_extract_cookie(serial):
     from services.adb import find_adb

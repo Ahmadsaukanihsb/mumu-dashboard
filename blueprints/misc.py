@@ -193,10 +193,10 @@ def _auto_rejoin(acc, reason=''):
         from services.adb import adb_force_stop_roblox
         adb_force_stop_roblox(serial)
         time.sleep(2)
-        from services.roblox import build_join_link
+        from services.roblox import build_public_link
         sv = next((s for s in servers if acc.get('server_ids') and s['id'] in acc.get('server_ids')), None)
         if sv:
-            link = build_join_link(sv)
+            link = build_public_link(sv)
             if link:
                 adb_connect(serial)
                 import subprocess
