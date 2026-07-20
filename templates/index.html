@@ -1153,7 +1153,7 @@
                                     <strong>Buka Termux & Jalankan Setup</strong>
                                     <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Copy-paste command ini di Termux:</p>
                                     <div class="code-block" style="position:relative;margin-top:8px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">pkg update -y && pkg install python adb git curl cloudflared -y && pip install flask flask-cors werkzeug && git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox && bash ~/dashboard-roblox/setup_termux.sh</pre>
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">pkg update -y && pkg install python adb git curl cloudflared -y && pip install flask flask-cors werkzeug && git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox && bash ~/dashboard-roblox/tools/setup_termux.sh</pre>
                                         <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
                                             <i class="fas fa-copy"></i>
                                         </button>
@@ -1168,7 +1168,7 @@
                                     <strong>Start Dashboard</strong>
                                     <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Jalankan dashboard di Termux:</p>
                                     <div class="code-block" style="position:relative;margin-top:8px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox && bash run_termux.sh</pre>
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox && bash tools/run_termux.sh</pre>
                                         <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
                                             <i class="fas fa-copy"></i>
                                         </button>
@@ -1183,7 +1183,7 @@
                                     <strong>Start Remote Monitor (Optional)</strong>
                                     <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Auto-rejoin & monitor untuk Cloudphone accounts:</p>
                                     <div class="code-block" style="position:relative;margin-top:8px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox && python remote_monitor.py --url https://dashboard.aavpanel.my.id</pre>
+                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox/tools && python remote_monitor.py --url https://dashboard.aavpanel.my.id</pre>
                                         <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
                                             <i class="fas fa-copy"></i>
                                         </button>
@@ -1261,7 +1261,7 @@ pip install flask flask-cors werkzeug
 git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox
 
 # Setup
-bash ~/dashboard-roblox/setup_termux.sh</pre>
+bash ~/dashboard-roblox/tools/setup_termux.sh</pre>
                                     </div>
                                 </div>
                                 <div>
@@ -1269,9 +1269,10 @@ bash ~/dashboard-roblox/setup_termux.sh</pre>
                                     <div class="code-block" style="font-size:11px">
                                         <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Start dashboard
 cd ~/dashboard-roblox
-bash run_termux.sh
+bash tools/run_termux.sh
 
 # Start remote monitor
+cd ~/dashboard-roblox/tools
 python remote_monitor.py --url https://dashboard.aavpanel.my.id
 
 # Update project
