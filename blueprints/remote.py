@@ -8,6 +8,7 @@ from services.webhook import send_webhook
 remote_bp = Blueprint('remote', __name__)
 
 remote_monitors = {}
+device_health = {}
 
 @remote_bp.route('/api/remote/register', methods=['POST'])
 def remote_register():
@@ -209,3 +210,77 @@ def remote_command_complete(cmd_id):
                 cmd['status'] = 'completed' if success else 'failed'
                 break
     return jsonify({'success': True})
+
+
+@remote_bp.route('/api/remote/health', methods=['POST'])
+def remote_health():
+    data = request.json or {}
+    did = data.get('device_id', '')
+    health = data.get('health', {})
+    if not did:
+        return jsonify({'error': 'device_id required'}), 400
+    health['updated_at'] = time.time()
+    device_health[did] = health
+    if remote_monitors.get(did):
+        remote_monitors[did]['last_report'] = time.time()
+    return jsonify({'success': True})
+
+
+@remote_bp.route('/api/remote/health', methods=['GET'])
+def remote_health_list():
+    result = []
+    for did, h in device_health.items():
+        result.append({
+            'device_id': did,
+            'uptime': h.get('uptime'),
+            'memory': h.get('memory'),
+            'storage': h.get('storage'),
+            'battery': h.get('battery'),
+            'root': h.get('root'),
+            'updated_at': h.get('updated_at', 0)
+        })
+    return jsonify({'devices': result, 'count': len(result)})
+
+
+@remote_bp.route('/api/remote/health/<device_id>', methods=['GET'])
+def remote_health_one(device_id):
+    h = device_health.get(device_id)
+    if not h:
+        return jsonify({'error': 'No health data for this device'}), 404
+    return jsonify({
+        'device_id': device_id,
+        'uptime': h.get('uptime'),
+        'memory': h.get('memory'),
+        'storage': h.get('storage'),
+        'battery': h.get('battery'),
+        'root': h.get('root'),
+        'updated_at': h.get('updated_at', 0)
+    })
+
+
+@remote_bp.route('/api/accounts/<acc_id>/reset', methods=['POST'])
+def reset_account(acc_id):
+    acc = next((a for a in accounts if a['id'] == acc_id), None)
+    if not acc:
+        return jsonify({'error': 'Account not found'}), 404
+    if not acc.get('device_id') or not acc.get('package_name'):
+        return jsonify({'error': 'Not a Cloudphone account'}), 400
+    from blueprints.mailbox import mailbox_commands, mailbox_results, command_lock
+    cmd_id = f'reset-{int(time.time() * 1000)}'
+    command = {
+        'id': cmd_id,
+        'type': 'reset_app',
+        'account': acc['name'],
+        'package': acc['package_name'],
+        'timestamp': time.time(),
+        'status': 'pending'
+    }
+    with command_lock:
+        mailbox_commands.append(command)
+        mailbox_results[cmd_id] = {'status': 'pending', 'message': 'Menunggu remote monitor...'}
+    with _data_lock:
+        acc['status'] = 'resetting'
+    save_data()
+    log_account(acc['id'], acc['name'], f'Reset command queued → {acc["package_name"]}')
+    log_activity(f'[{acc["name"]}] Reset app queued')
+    return jsonify({'success': True, 'command_id': cmd_id, 'message': f'Reset queued for {acc["package_name"]}'})

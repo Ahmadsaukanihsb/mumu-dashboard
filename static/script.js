@@ -494,6 +494,7 @@ function updateAccountsTable() {
                             <button class="btn" onclick="pushScript('${a.id}')"><i class="fas fa-upload"></i> Push Script</button>
                             <button class="btn" onclick="verifyAccount('${a.id}')"><i class="fas fa-check-circle"></i> Verify</button>
                             <button class="btn btn-warning" onclick="rollbackAccount('${a.id}')"><i class="fas fa-undo"></i> Rollback</button>
+                            ${a.package_name ? `<button class="btn btn-warning" onclick="resetCloudphone('${a.id}', '${esc(a.package_name)}', '${esc(a.device_id || '')}')" title="Reset app (pm clear)"><i class="fas fa-broom"></i> Reset</button>` : ''}
                             <button class="btn" onclick="editAccount('${a.id}')"><i class="fas fa-edit"></i> Edit</button>
                             <button class="btn" onclick="moveAccountVM('${a.id}', '${esc(a.name)}', ${a.mumu_instance != null ? a.mumu_instance : 0})"><i class="fas fa-desktop"></i> Pindah VM</button>
                             <button class="btn btn-danger" onclick="deleteAccount('${a.id}')"><i class="fas fa-trash"></i> Delete</button>
@@ -1420,6 +1421,66 @@ async function rollbackAccount(accId) {
         showToast('Rollback failed: ' + (res?.error || 'unknown'), 'error');
     }
     refreshData();
+}
+
+async function resetCloudphone(accId, packageName, deviceId) {
+    if (!confirm(`Reset app ${packageName}?\nSemua data & cookie akan dihapus (pm clear).\nSetelah reset, app akan auto-rejoin.`)) return;
+    const res = await api('POST', `/api/accounts/${accId}/reset`);
+    if (res && res.success) {
+        showToast(`Reset queued: ${packageName}`, 'success');
+    } else {
+        showToast('Reset failed: ' + (res?.error || 'unknown'), 'error');
+    }
+    refreshData();
+}
+
+async function showDeviceHealth() {
+    const res = await api('GET', '/api/remote/health');
+    const devices = res?.devices || [];
+    if (devices.length === 0) {
+        showToast('Belum ada data kesehatan device', 'info');
+        return;
+    }
+    let html = '<div style="display:flex;flex-direction:column;gap:16px">';
+    for (const d of devices) {
+        const mem = d.memory || {};
+        const sto = d.storage || {};
+        const bat = d.battery || {};
+        const up = d.uptime || {};
+        html += `
+        <div style="background:var(--bg-input);border-radius:8px;padding:16px;border:1px solid var(--border-color)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <strong style="font-size:14px"><i class="fas fa-mobile-alt"></i> ${esc(d.device_id)}</strong>
+                <span style="font-size:11px;color:var(--text-muted)">Updated: ${d.updated_at ? new Date(d.updated_at * 1000).toLocaleTimeString() : '-'}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+                <div><i class="fas fa-clock" style="color:var(--accent-1);width:16px"></i> Uptime: <strong>${up.formatted || '-'}</strong></div>
+                <div><i class="fas fa-microchip" style="color:var(--accent-2);width:16px"></i> Root: <strong>${d.root ? 'Yes' : 'No'}</strong></div>
+                <div style="grid-column:span 2">
+                    <i class="fas fa-memory" style="color:var(--accent-1);width:16px"></i> Memory: <strong>${mem.used_mb || 0} MB / ${mem.total_mb || 0} MB</strong> (${mem.used_percent || 0}%)
+                    <div style="background:var(--bg-card);border-radius:4px;height:6px;margin-top:4px;overflow:hidden">
+                        <div style="background:${(mem.used_percent||0) > 80 ? 'var(--red)' : (mem.used_percent||0) > 60 ? 'var(--yellow)' : 'var(--green)'};height:100%;width:${mem.used_percent||0}%;border-radius:4px"></div>
+                    </div>
+                </div>
+                <div style="grid-column:span 2">
+                    <i class="fas fa-hdd" style="color:var(--accent-2);width:16px"></i> Storage: <strong>${sto.used_gb || 0} GB / ${sto.total_gb || 0} GB</strong> (${sto.used_percent || 0}%)
+                    <div style="background:var(--bg-card);border-radius:4px;height:6px;margin-top:4px;overflow:hidden">
+                        <div style="background:${(sto.used_percent||0) > 90 ? 'var(--red)' : (sto.used_percent||0) > 70 ? 'var(--yellow)' : 'var(--green)'};height:100%;width:${sto.used_percent||0}%;border-radius:4px"></div>
+                    </div>
+                </div>
+                ${bat.level != null ? `
+                <div style="grid-column:span 2">
+                    <i class="fas fa-battery-${bat.level > 70 ? 'full' : bat.level > 30 ? 'half' : 'quarter'}" style="color:${bat.level > 70 ? 'var(--green)' : bat.level > 30 ? 'var(--yellow)' : 'var(--red)'};width:16px"></i> Battery: <strong>${bat.level}%</strong> ${bat.status || ''} ${bat.temperature_c ? `| ${bat.temperature_c}°C` : ''}
+                </div>` : ''}
+            </div>
+        </div>`;
+    }
+    html += '</div>';
+    showModal(`<div style="padding:16px"><h3 style="margin:0 0 16px;font-size:16px"><i class="fas fa-heartbeat"></i> Device Health</h3>${html}<div style="text-align:right;margin-top:16px"><button class="btn btn-secondary" onclick="closeDynamicModal()">Close</button></div></div>`);
+    if (_dynamicModal) {
+        const mc = _dynamicModal.querySelector('.modal-content');
+        if (mc) mc.style.maxWidth = '500px';
+    }
 }
 
 async function injectAccount(accId) {

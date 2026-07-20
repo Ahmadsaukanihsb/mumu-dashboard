@@ -165,6 +165,112 @@ class RootMonitor:
                 return int(m.group(1)), int(m.group(2))
         return 1080, 1920
 
+    def get_uptime(self):
+        code, out = self.su_cmd('cat /proc/uptime')
+        if code == 0 and out:
+            parts = out.split()
+            if parts:
+                secs = float(parts[0])
+                days = int(secs // 86400)
+                hrs = int((secs % 86400) // 3600)
+                mins = int((secs % 3600) // 60)
+                return {'seconds': int(secs), 'formatted': f'{days}d {hrs}h {mins}m' if days else f'{hrs}h {mins}m'}
+        return None
+
+    def get_memory_info(self):
+        code, out = self.su_cmd('cat /proc/meminfo')
+        if code == 0:
+            total = available = None
+            for line in out.split('\n'):
+                if 'MemTotal:' in line:
+                    total = int(line.split()[1])
+                if 'MemAvailable:' in line:
+                    available = int(line.split()[1])
+            if total and available and total > 0:
+                used = total - available
+                return {
+                    'total_mb': round(total / 1024),
+                    'used_mb': round(used / 1024),
+                    'available_mb': round(available / 1024),
+                    'used_percent': round(used / total * 100, 1)
+                }
+        return None
+
+    def get_storage_info(self):
+        code, out = self.su_cmd('df /data')
+        if code == 0:
+            lines = out.strip().split('\n')
+            if len(lines) >= 2:
+                parts = lines[1].split()
+                if len(parts) >= 4:
+                    total = int(parts[1]) * 1024
+                    used = int(parts[2]) * 1024
+                    avail = int(parts[3]) * 1024
+                    return {
+                        'total_gb': round(total / (1024*1024*1024), 1),
+                        'used_gb': round(used / (1024*1024*1024), 1),
+                        'available_gb': round(avail / (1024*1024*1024), 1),
+                        'used_percent': round(used / total * 100, 1) if total > 0 else 0
+                    }
+        return None
+
+    def get_battery_info(self):
+        code, out = self.su_cmd('dumpsys battery')
+        if code == 0:
+            level = temperature = voltage = status = None
+            for line in out.split('\n'):
+                line = line.strip()
+                if 'level:' in line:
+                    try: level = int(line.split(':')[1].strip())
+                    except: pass
+                if 'temperature:' in line:
+                    try: temperature = int(line.split(':')[1].strip()) / 10
+                    except: pass
+                if 'voltage:' in line:
+                    try: voltage = int(line.split(':')[1].strip())
+                    except: pass
+                if 'status:' in line:
+                    try: status = int(line.split(':')[1].strip())
+                    except: pass
+            if level is not None:
+                status_map = {1: 'Unknown', 2: 'Charging', 3: 'Discharging', 4: 'Not charging', 5: 'Full'}
+                return {
+                    'level': level,
+                    'temperature_c': temperature,
+                    'voltage_mv': voltage,
+                    'status': status_map.get(status, 'Unknown')
+                }
+        return None
+
+    def get_device_health(self):
+        return {
+            'device_id': self.device_id,
+            'uptime': self.get_uptime(),
+            'memory': self.get_memory_info(),
+            'storage': self.get_storage_info(),
+            'battery': self.get_battery_info(),
+            'root': self.has_root,
+            'timestamp': time.time()
+        }
+
+    def report_health(self):
+        health = self.get_device_health()
+        return self.http_post('/api/remote/health', {
+            'device_id': self.device_id,
+            'health': health
+        })
+
+    def reset_app(self, package):
+        print(f'[RESET] Clearing data for {package}...')
+        self.su_cmd(f'am force-stop {package}')
+        time.sleep(1)
+        code, out = self.su_cmd(f'pm clear {package}')
+        if code == 0:
+            print(f'[RESET] {package} cleared successfully')
+            return True
+        print(f'[RESET] Failed to clear {package}: {out}')
+        return False
+
     def extract_cookie(self, package='com.roblox.client'):
         paths = [
             f'/data/data/{package}/shared_prefs/roblox.xml',
@@ -338,6 +444,7 @@ class RootMonitor:
 
         self.running = True
         self._last_rejoin = {}
+        self._last_health_report = 0
         print(f'[MONITOR] Monitor started! Polling every {self.poll_interval}s...')
 
         while self.running:
@@ -348,6 +455,13 @@ class RootMonitor:
                 auto_join_global = self.settings.get('auto_join_enabled', True)
                 account_settings = self.settings.get('account_settings', {})
                 now = time.time()
+
+                if now - self._last_health_report >= 60:
+                    try:
+                        self.report_health()
+                        self._last_health_report = now
+                    except Exception as e:
+                        print(f'[HEALTH] Report failed: {e}')
 
                 for pkg in self.packages:
                     if not self.running:
@@ -512,6 +626,8 @@ class RootMonitor:
                     self._execute_mailbox_send(account_name, cmd)
                 elif cmd_type == 'send_gift':
                     self._execute_gift(account_name, cmd)
+                elif cmd_type == 'reset_app':
+                    self._execute_reset_command(account_name, cmd)
                 self.complete_command(cmd_id, True, 'Executed')
             except Exception as e:
                 self.complete_command(cmd_id, False, str(e))
@@ -539,6 +655,23 @@ class RootMonitor:
         if not target_id or not item_id:
             return
         print(f'[{account_name}] Gifting {item_id} to {cmd.get("target", "?")} (ID: {target_id})')
+
+    def _execute_reset_command(self, account_name, cmd):
+        package = cmd.get('package', '')
+        if not package:
+            print(f'[{account_name}] Reset command missing package')
+            return
+        success = self.reset_app(package)
+        if success:
+            print(f'[{account_name}] App reset complete, waiting before rejoin...')
+            time.sleep(3)
+            link = self._get_join_link(account_name)
+            if link:
+                self.start_join_intent(package, link)
+                self.report_status(account_name, package, 'rejoining')
+                print(f'[{account_name}] Rejoin after reset → {link[:80]}...')
+        else:
+            print(f'[{account_name}] App reset failed')
 
 
 CONFIG_PATH = '/sdcard/Download/dashboard_config.json'
