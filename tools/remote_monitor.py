@@ -455,12 +455,21 @@ class RootMonitor:
     def _get_join_link(self, account_name=None):
         config = self.settings or {}
         servers = config.get('servers', [])
+        account_settings = config.get('account_settings', {})
         server = config.get('current_server', {})
         if account_name and servers:
-            for s in servers:
-                if s.get('name') == account_name or s.get('id'):
-                    server = s
+            pkg = None
+            for p, info in self.account_map.items():
+                if info == account_name:
+                    pkg = p
                     break
+            if pkg and pkg in account_settings:
+                target_id = account_settings[pkg].get('server_id', '')
+                if target_id:
+                    for s in servers:
+                        if s.get('id') == target_id:
+                            server = s
+                            break
         place_id = server.get('place_id', '')
         server_code = server.get('server_code', '')
         link = server.get('link', '')
@@ -468,12 +477,16 @@ class RootMonitor:
             return link
         if not place_id:
             if servers:
-                server = servers[0]
-                place_id = server.get('place_id', '')
-                server_code = server.get('server_code', '')
-                link = server.get('link', '')
-                if link:
-                    return link
+                for s in servers:
+                    if s.get('server_code'):
+                        server = s
+                        place_id = s.get('place_id', '')
+                        server_code = s.get('server_code', '')
+                        break
+                if not place_id:
+                    server = servers[0]
+                    place_id = server.get('place_id', '')
+                    server_code = server.get('server_code', '')
             if not place_id:
                 return None
         if server_code:

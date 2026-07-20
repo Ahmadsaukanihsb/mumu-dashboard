@@ -162,7 +162,8 @@ def remote_config():
         pkg = acc.get('package_name', '')
         if pkg:
             account_settings[pkg] = {
-                'auto_join': acc.get('auto_join', False)
+                'auto_join': acc.get('auto_join', False),
+                'server_id': acc.get('server_id', '')
             }
     return jsonify({
         'monitor_interval': settings.get('monitor_interval', 5),
