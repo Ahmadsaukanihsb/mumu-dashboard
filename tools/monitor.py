@@ -7,7 +7,7 @@ def debug(*args):
     sys.stderr.write('[MONITOR] ' + ' '.join(str(a) for a in args) + '\n')
     sys.stderr.flush()
 
-from models import accounts, servers, settings, monitor_state, _data_lock, _join_threads, _join_threads_lock, _join_timestamps, user_shutdown_instances, log_account, log_activity, save_data, get_package_name
+from models import accounts, servers, settings, monitor_state, _data_lock, _join_threads, _join_threads_lock, _join_timestamps, user_shutdown_instances, log_account, log_activity, save_data, get_package_name, decrypt_cookie
 from services.adb import get_serial, adb_connect, adb_check_roblox, adb_get_thread_count, adb_dismiss_dialogs, adb_check_in_game, adb_detect_kicked_dialog, adb_force_stop_roblox, adb_check_in_foreground, adb_check_network_active
 from services.mumu import ensure_vm_running, launch_mumu, send_join_intent
 from services.roblox import verify_cookie, build_join_link
@@ -89,7 +89,9 @@ def monitor_loop():
                     if not sv and servers:
                         sv = servers[0]
                     if sv:
-                        link = build_join_link(sv)
+                        c = acc.get('cookie', '')
+                        cookie = decrypt_cookie(c) if c and c.startswith('enc:') else c
+                        link = build_join_link(sv, cookie)
                         if link:
                             with _join_threads_lock:
                                 if acc_id not in _join_threads:

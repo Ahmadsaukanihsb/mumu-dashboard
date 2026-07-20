@@ -35,15 +35,32 @@ def verify_cookie(cookie):
     except Exception as e:
         return {'valid': False, 'error': str(e)}
 
-def build_join_link(sv):
+def resolve_private_server_link(place_id, code, cookie=None):
+    import urllib.parse
+    url = f'https://games.roblox.com/v1/games/{place_id}/servers/Private?sortOrder=Asc&limit=10&privateServerLinkCode={urllib.parse.quote(code)}'
+    req = urllib.request.Request(url)
+    req.add_header('User-Agent', 'Roblox/Win32')
+    if cookie:
+        req.add_header('Cookie', f'.ROBLOSECURITY={cookie}')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode())
+            for srv in data.get('data', []):
+                gid = srv.get('id', '')
+                if gid:
+                    return f'roblox://experiences/start?placeId={place_id}&gameInstanceId={gid}'
+    except Exception as e:
+        print(f'[WARN] resolve_private_server_link: {e}')
+    return f'roblox://experiences/start?placeId={place_id}&linkCode={urllib.parse.quote(code)}'
+
+def build_join_link(sv, cookie=None):
     base = sv.get('place_id', '')
     if not base:
         return None
     if sv.get('type') == 'private':
         code = sv.get('server_code', '')
         if code:
-            import urllib.parse
-            return f'roblox://experiences/start?placeId={base}&linkCode={urllib.parse.quote(code)}'
+            return resolve_private_server_link(base, code, cookie)
     return f'roblox://placeId={base}'
 
 def _adb_extract_cookie(serial):

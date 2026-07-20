@@ -30,6 +30,12 @@ def _queue_remote_join(acc, link, sv):
     log_account(acc['id'], acc['name'], f'Join command queued → remote monitor ({acc.get("device_id")})')
     return cmd_id
 
+def _get_cookie(acc):
+    c = acc.get('cookie', '')
+    if c:
+        return decrypt_cookie(c) if c.startswith('enc:') else c
+    return None
+
 @join_bp.route('/api/accounts/<acc_id>/join', methods=['POST'])
 def join_server(acc_id):
     acc = next((a for a in accounts if a['id'] == acc_id), None)
@@ -42,7 +48,8 @@ def join_server(acc_id):
         sv = servers[0]
     if not sv:
         return jsonify({'error': 'No server configured'}), 400
-    link = build_join_link(sv)
+    cookie = _get_cookie(acc)
+    link = build_join_link(sv, cookie)
     if not link:
         return jsonify({'error': 'Could not build join link'}), 400
     with _data_lock:
@@ -64,18 +71,21 @@ def join_all():
     if not servers:
         return jsonify({'error': 'No servers configured'}), 400
     sv = servers[0]
-    link = build_join_link(sv)
+    cookie = _get_cookie(accounts[0]) if accounts else None
+    link = build_join_link(sv, cookie)
     if not link:
         return jsonify({'error': 'Could not build join link'}), 400
     count = 0
     remote_count = 0
     for acc in accounts:
         if acc.get('cookie') or _is_cloudphone(acc):
+            acc_cookie = _get_cookie(acc) or cookie
             with _data_lock:
                 acc['status'] = 'joining'
                 acc['active'] = True
             if _is_cloudphone(acc):
-                _queue_remote_join(acc, link, sv)
+                acc_link = build_join_link(sv, acc_cookie)
+                _queue_remote_join(acc, acc_link, sv)
                 remote_count += 1
             else:
                 with _join_threads_lock:
@@ -110,7 +120,8 @@ def rollback_account(acc_id):
     sv = next((s for s in servers if acc.get('server_ids') and s['id'] in acc.get('server_ids')), None) or (servers[0] if servers else None)
     if not sv:
         return jsonify({'error': 'No server configured'}), 400
-    link = build_join_link(sv)
+    cookie = _get_cookie(acc)
+    link = build_join_link(sv, cookie)
     if not link:
         return jsonify({'error': 'Failed to build join link'}), 500
     if _is_cloudphone(acc):
