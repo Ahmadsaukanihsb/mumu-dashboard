@@ -49,7 +49,8 @@ def join_server(acc_id):
     if not sv:
         return jsonify({'error': 'No server configured'}), 400
     cookie = _get_cookie(acc)
-    link = build_join_link(sv, cookie)
+    is_cp = _is_cloudphone(acc)
+    link = build_join_link(sv, cookie, for_cloudphone=is_cp)
     if not link:
         return jsonify({'error': 'Could not build join link'}), 400
     with _data_lock:
@@ -57,7 +58,7 @@ def join_server(acc_id):
         acc['active'] = True
     save_data()
     log_account(acc['id'], acc['name'], f'Joining server "{sv["name"]}"')
-    if _is_cloudphone(acc):
+    if is_cp:
         cmd_id = _queue_remote_join(acc, link, sv)
         return jsonify({'status': 'joining', 'link': link, 'via': 'remote_monitor', 'command_id': cmd_id})
     with _join_threads_lock:
@@ -80,11 +81,12 @@ def join_all():
     for acc in accounts:
         if acc.get('cookie') or _is_cloudphone(acc):
             acc_cookie = _get_cookie(acc) or cookie
+            is_cp = _is_cloudphone(acc)
             with _data_lock:
                 acc['status'] = 'joining'
                 acc['active'] = True
-            if _is_cloudphone(acc):
-                acc_link = build_join_link(sv, acc_cookie)
+            if is_cp:
+                acc_link = build_join_link(sv, acc_cookie, for_cloudphone=True)
                 _queue_remote_join(acc, acc_link, sv)
                 remote_count += 1
             else:
@@ -121,10 +123,11 @@ def rollback_account(acc_id):
     if not sv:
         return jsonify({'error': 'No server configured'}), 400
     cookie = _get_cookie(acc)
-    link = build_join_link(sv, cookie)
+    is_cp = _is_cloudphone(acc)
+    link = build_join_link(sv, cookie, for_cloudphone=is_cp)
     if not link:
         return jsonify({'error': 'Failed to build join link'}), 500
-    if _is_cloudphone(acc):
+    if is_cp:
         _queue_remote_join(acc, link, sv)
         acc['status'] = 'rollback'
         log_account(acc_id, name, f'Rollback → remote monitor rejoin ke {sv["name"]}')
