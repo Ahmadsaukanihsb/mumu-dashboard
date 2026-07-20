@@ -458,7 +458,8 @@ function updateAccountsTable() {
         const displayName = a.app_label ? `${a.app_label}` : a.name;
         const subName = a.package_name ? `<span style="font-size:10px;color:var(--text-muted);font-family:monospace">${esc(a.package_name)}</span>` : '';
         return `
-        <tr>
+        <tr data-id="${a.id}">
+            <td><input type="checkbox" class="account-checkbox" value="${a.id}" onchange="updateSelection()"></td>
             <td><strong style="cursor:pointer;color:var(--accent-1)" onclick="showAccountProfile('${a.id}')">${esc(displayName)} <i class="fas fa-external-link-alt" style="font-size:9px;opacity:0.5"></i></strong>${subName ? '<br>' + subName : ''}</td>
             <td>${getStatusBadge(a.status)}${renderDeltaKeyIcon(a)} <span class="countdown"${a.next_rejoin_in != null ? ` data-seconds="${a.next_rejoin_in}"` : ''} style="font-size:10px;color:var(--text-muted)"><i class="fas fa-history"></i> <span class="cd-time">${formatCountdown(a.next_rejoin_in)}</span></span></td>
             <td>${a.package_name ? `<span class="badge badge-info" title="${esc(a.package_name)}">Cloudphone</span> <span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">${esc(a.device_id || '')}</span>` : `<span class="badge badge-info">${vmLabel}</span>`}</td>
@@ -1264,6 +1265,29 @@ async function doMoveVM(id, instance) {
 async function deleteAccount(id) {
     if (!confirm('Hapus account ini?')) return;
     await api('DELETE', `/api/accounts/${id}`);
+    await refreshData();
+}
+
+function toggleSelectAll(el) {
+    document.querySelectorAll('.account-checkbox').forEach(cb => { cb.checked = el.checked; });
+    updateSelection();
+}
+
+function updateSelection() {
+    const checked = document.querySelectorAll('.account-checkbox:checked');
+    const count = checked.length;
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('btnDeleteSelected').style.display = count > 0 ? '' : 'none';
+    document.getElementById('selectAllAccounts').checked = count > 0 && count === document.querySelectorAll('.account-checkbox').length;
+}
+
+async function deleteSelectedAccounts() {
+    const checked = document.querySelectorAll('.account-checkbox:checked');
+    const ids = Array.from(checked).map(cb => cb.value);
+    if (!ids.length) return;
+    if (!confirm(`Hapus ${ids.length} account?`)) return;
+    await api('POST', '/api/accounts/batch-delete', { ids });
+    document.getElementById('selectAllAccounts').checked = false;
     await refreshData();
 }
 

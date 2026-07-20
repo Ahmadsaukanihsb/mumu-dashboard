@@ -735,6 +735,8 @@ body {
 .table tr:last-child td { border-bottom: none; }
 
 .table tr:hover td { background: rgba(255, 59, 74, 0.03); }
+.table tr:has(.account-checkbox:checked) td { background: rgba(255, 59, 74, 0.08); }
+.account-checkbox { width: 16px; height: 16px; accent-color: var(--accent-1); cursor: pointer; }
 
 .table .actions {
     display: flex;

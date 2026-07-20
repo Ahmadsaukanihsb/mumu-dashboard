@@ -137,6 +137,26 @@ def delete_account(acc_id):
         log_activity(f'Account "{acc["name"]}" dihapus')
     return jsonify({'success': True})
 
+@accounts_bp.route('/api/accounts/batch-delete', methods=['POST'])
+def batch_delete_accounts():
+    data = request.json or {}
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'error': 'No IDs provided'}), 400
+    deleted = []
+    with _data_lock:
+        for acc_id in ids:
+            acc = next((a for a in accounts if a['id'] == acc_id), None)
+            if acc:
+                deleted.append(acc.get('name', acc_id))
+                accounts[:] = [a for a in accounts if a['id'] != acc_id]
+                monitor_state.pop(acc_id, None)
+                acc_logs.pop(acc_id, None)
+    save_data()
+    if deleted:
+        log_activity(f'Batch delete: {len(deleted)} accounts dihapus')
+    return jsonify({'success': True, 'deleted': deleted, 'count': len(deleted)})
+
 @accounts_bp.route('/api/accounts/<acc_id>/verify', methods=['POST'])
 def verify_account(acc_id):
     acc = next((a for a in accounts if a['id'] == acc_id), None)
