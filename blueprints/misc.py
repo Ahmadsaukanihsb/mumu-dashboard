@@ -60,11 +60,23 @@ def get_summary():
             price = sell_prices.get(item.get('name', ''), 0)
             total_inventory_value += price * item.get('count', 0)
 
+    from services.delta import get_active_delta_keys_count, delta_key_store, _delta_lock
+    active_delta_keys = 0
+    expired_delta_keys = 0
+    now = time.time()
+    with _delta_lock:
+        for v in delta_key_store.values():
+            if v.get('key') and v.get('expires_at', 0) > now:
+                active_delta_keys += 1
+            elif v.get('key'):
+                expired_delta_keys += 1
+
     return jsonify({
         'total_accounts': total, 'online': online, 'error': error, 'idle': idle,
         'verified': verified, 'total_robux': total_robux,
         'total_sheckles': total_sheckles, 'total_inventory_value': total_inventory_value,
-        'running_vms': running_vms, 'total_vms': len(settings.get('mumu_serials', [])) or 1
+        'running_vms': running_vms, 'total_vms': len(settings.get('mumu_serials', [])) or 1,
+        'active_delta_keys': active_delta_keys, 'expired_delta_keys': expired_delta_keys
     })
 
 @misc_bp.route('/api/games/search', methods=['GET'])

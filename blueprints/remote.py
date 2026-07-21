@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from models import accounts, servers, settings, _data_lock, save_data, encrypt_cookie, log_activity, log_account
 from services.webhook import send_webhook
+from services.delta import delta_key_store, _delta_lock
 
 remote_bp = Blueprint('remote', __name__)
 
@@ -11,6 +12,8 @@ remote_monitors = {}
 device_health = {}
 _offline_notified = {}
 OFFLINE_THRESHOLD = 180
+delta_bypass_logs = []
+_delta_log_lock = threading.Lock()
 
 @remote_bp.route('/api/remote/register', methods=['POST'])
 def remote_register():
@@ -370,14 +373,54 @@ def remote_devices():
 def remote_delta_key_bypass():
     data = request.json or {}
     url = data.get('url', '')
+    device_id = data.get('device_id', '')
+    package = data.get('package', '')
     if not url:
         return jsonify({'error': 'url required'}), 400
     from services.delta import delta_bypass_url
+
+    acc = None
+    if device_id and package:
+        acc = next((a for a in accounts if a.get('device_id') == device_id and a.get('package_name') == package), None)
+
     result = delta_bypass_url(url)
+    log_entry = {
+        'time': time.time(),
+        'device_id': device_id or '?',
+        'package': package or '?',
+        'account': acc.get('name', '?') if acc else '?',
+        'url': url[:120],
+        'status': 'failed',
+        'message': 'Bypass failed',
+        'key_preview': ''
+    }
     if result and result.get('key'):
-        return jsonify({'key': result['key']})
+        key = result['key']
+        log_entry['status'] = 'success'
+        log_entry['message'] = 'Key obtained'
+        log_entry['key_preview'] = key[:12] + '...'
+        if acc:
+            from services.delta import delta_set_stored_key
+            delta_set_stored_key(acc['id'], key)
+            log_entry['account'] = acc.get('name', '?')
+            log_activity(f'[Delta Key] Bypass success for {acc["name"]} ({package})')
+        with _delta_log_lock:
+            delta_bypass_logs.append(log_entry)
+            if len(delta_bypass_logs) > 200:
+                delta_bypass_logs[:] = delta_bypass_logs[-200:]
+        return jsonify({'key': key, 'stored': bool(acc)})
     if result and result.get('redirect'):
+        log_entry['status'] = 'redirect'
+        log_entry['message'] = f'Redirect: {result["redirect"][:80]}'
+        with _delta_log_lock:
+            delta_bypass_logs.append(log_entry)
+            if len(delta_bypass_logs) > 200:
+                delta_bypass_logs[:] = delta_bypass_logs[-200:]
         return jsonify({'redirect': result['redirect']})
+    with _delta_log_lock:
+        delta_bypass_logs.append(log_entry)
+        if len(delta_bypass_logs) > 200:
+            delta_bypass_logs[:] = delta_bypass_logs[-200:]
     return jsonify({'error': 'Bypass failed'}), 400
 
 
@@ -403,3 +446,70 @@ def remote_delta_key_queue(device_id, package):
         mailbox_results[cmd_id] = {'status': 'pending', 'message': 'Menunggu remote monitor...'}
     log_activity(f'Delta key queued: {package} on {device_id}')
     return jsonify({'success': True, 'command_id': cmd_id, 'message': f'Delta key queued for {package}'})
+
+
+@remote_bp.route('/api/remote/delta-keys', methods=['GET'])
+def remote_delta_keys():
+    result = []
+    for acc in accounts:
+        if not acc.get('device_id') or not acc.get('package_name'):
+            continue
+        acc_id = acc['id']
+        with _delta_lock:
+            entry = delta_key_store.get(acc_id)
+        expires_in = None
+        has_key = False
+        if entry and entry.get('key'):
+            expires_in = int(entry['expires_at'] - time.time())
+            has_key = expires_in > 0
+            if expires_in < 0:
+                expires_in = 0
+        result.append({
+            'account_id': acc_id,
+            'account_name': acc.get('name', '?'),
+            'device_id': acc.get('device_id', ''),
+            'package': acc.get('package_name', ''),
+            'has_key': has_key,
+            'expires_in': expires_in,
+            'updated_at': entry.get('updated_at', 0) if entry else 0
+        })
+    return jsonify({'keys': result, 'count': len(result)})
+
+
+@remote_bp.route('/api/remote/delta-logs', methods=['GET'])
+def remote_delta_logs():
+    limit = request.args.get('limit', 50, type=int)
+    with _delta_log_lock:
+        logs = list(reversed(delta_bypass_logs))[:limit]
+    return jsonify({'logs': logs, 'count': len(logs)})
+
+
+@remote_bp.route('/api/remote/delta-key/<device_id>/<package>/report', methods=['POST'])
+def remote_delta_key_report(device_id, package):
+    from urllib.parse import unquote
+    device_id = unquote(device_id)
+    package = unquote(package)
+    data = request.json or {}
+    success = data.get('success', False)
+    message = data.get('message', '')
+    key_preview = data.get('key_preview', '')
+    acc = next((a for a in accounts if a.get('device_id') == device_id and a.get('package_name') == package), None)
+    log_entry = {
+        'time': time.time(),
+        'device_id': device_id,
+        'package': package,
+        'account': acc.get('name', '?') if acc else '?',
+        'url': '',
+        'status': 'injected' if success else 'inject_failed',
+        'message': message or ('Key injected' if success else 'Injection failed'),
+        'key_preview': key_preview
+    }
+    with _delta_log_lock:
+        delta_bypass_logs.append(log_entry)
+        if len(delta_bypass_logs) > 200:
+            delta_bypass_logs[:] = delta_bypass_logs[-200:]
+    if success and acc:
+        log_activity(f'[Delta Key] Injected for {acc["name"]} ({package})')
+    elif not success and acc:
+        log_activity(f'[Delta Key] Injection FAILED for {acc["name"]} ({package}): {message}')
+    return jsonify({'success': True})

@@ -136,6 +136,9 @@
                 <a class="nav-item" data-page="termux" onclick="switchPage('termux')">
                     <i class="fas fa-mobile-alt"></i><span>Termux Guide</span>
                 </a>
+                <a class="nav-item" data-page="delta-keys" onclick="switchPage('delta-keys')">
+                    <i class="fas fa-key"></i><span>Delta Keys</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -1298,6 +1301,73 @@ cd ~/dashboard-roblox
 git pull</pre>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delta Keys Page -->
+                <div class="page" id="page-delta-keys">
+                    <div class="page-toolbar">
+                        <div class="page-toolbar-actions">
+                            <button class="btn btn-secondary" onclick="loadDeltaKeys()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                        </div>
+                    </div>
+
+                    <!-- Summary Cards -->
+                    <div class="stats-grid" style="margin-bottom:16px">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:linear-gradient(135deg,#00b4d8,#0284c7)">
+                                <i class="fas fa-mobile-alt"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Devices</span>
+                                <span class="stat-value" id="dkDevices" style="color:var(--blue)">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:linear-gradient(135deg,#22c55e,#16a34a)">
+                                <i class="fas fa-key"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Keys Active</span>
+                                <span class="stat-value" id="dkActive" style="color:var(--green)">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626)">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Expired</span>
+                                <span class="stat-value" id="dkExpired" style="color:var(--red)">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">No Key</span>
+                                <span class="stat-value" id="dkMissing" style="color:var(--yellow)">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Per-Device Key Grid -->
+                    <div id="deltaKeysGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;margin-bottom:20px">
+                        <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading...</div>
+                    </div>
+
+                    <!-- Bypass Logs -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-history"></i> Bypass Logs</h3>
+                            <button class="btn btn-sm btn-secondary" onclick="loadDeltaLogs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                        </div>
+                        <div class="card-body" style="max-height:400px;overflow-y:auto">
+                            <div id="deltaLogsContainer">
+                                <div class="empty-state"><i class="fas fa-history"></i> No logs yet</div>
                             </div>
                         </div>
                     </div>

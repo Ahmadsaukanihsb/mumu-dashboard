@@ -779,8 +779,18 @@ class RootMonitor:
         key, err = self.delta_auto_get_key(package)
         if key:
             print(f'[{account_name}] Delta key obtained: {key[:20]}...')
+            self.http_post(f'/api/remote/delta-key/{self.device_id}/{package}/report', {
+                'success': True,
+                'key_preview': key[:12] + '...',
+                'message': 'Key injected'
+            })
         else:
             print(f'[{account_name}] Delta key failed: {err}')
+            self.http_post(f'/api/remote/delta-key/{self.device_id}/{package}/report', {
+                'success': False,
+                'key_preview': '',
+                'message': str(err)
+            })
 
 
 CONFIG_PATH = '/sdcard/Download/dashboard_config.json'

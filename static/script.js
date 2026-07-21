@@ -118,7 +118,8 @@ function switchPage(page) {
         logs: { title: 'Logs', icon: 'clipboard-list' },
         inventory: { title: 'Inventory', icon: 'box-open' },
         command: { title: 'Command', icon: 'terminal' },
-        termux: { title: 'Termux Guide', icon: 'mobile-alt' }
+        termux: { title: 'Termux Guide', icon: 'mobile-alt' },
+        'delta-keys': { title: 'Delta Keys', icon: 'key' }
     };
     const meta = pageMeta[page] || { title: 'Dashboard', icon: 'chart-pie' };
     document.getElementById('pageTitle').textContent = meta.title;
@@ -129,6 +130,7 @@ function switchPage(page) {
     if (page === 'vms') { refreshMuMuVMs(); }
     if (page === 'devices') { startDevicesAutoRefresh(); } else { stopDevicesAutoRefresh(); }
     if (page === 'inventory') { refreshInventory(); }
+    if (page === 'delta-keys') { loadDeltaKeys(); loadDeltaLogs(); }
     if (page === 'command') { initMailbox(); }
     if (page === 'logs') {
         populateLogAccountSelect();
@@ -189,6 +191,13 @@ async function refreshData() {
             if (el) {
                 el.textContent = v;
             }
+        }
+        const dkEl = document.getElementById('statDeltaKey');
+        if (dkEl) {
+            const active = sum.active_delta_keys || 0;
+            const expired = sum.expired_delta_keys || 0;
+            dkEl.textContent = `${active} active`;
+            dkEl.style.color = active > 0 ? 'var(--green)' : 'var(--yellow)';
         }
     }
     if (sum && typeof sum.online === 'number' && accounts.length === 0) {
@@ -2111,6 +2120,98 @@ function startDevicesAutoRefresh() {
 
 function stopDevicesAutoRefresh() {
     if (_devicesAutoRefresh) { clearInterval(_devicesAutoRefresh); _devicesAutoRefresh = null; }
+}
+
+async function loadDeltaKeys() {
+    const grid = document.getElementById('deltaKeysGrid');
+    if (!grid) return;
+    const res = await api('GET', '/api/remote/delta-keys');
+    if (!res || !res.keys) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i> Failed to load keys</div>';
+        return;
+    }
+    const keys = res.keys;
+    const devices = {};
+    let active = 0, expired = 0, missing = 0;
+    for (const k of keys) {
+        if (!devices[k.device_id]) devices[k.device_id] = [];
+        devices[k.device_id].push(k);
+        if (k.has_key) active++;
+        else if (k.expires_in === 0) expired++;
+        else missing++;
+    }
+    document.getElementById('dkDevices').textContent = Object.keys(devices).length;
+    document.getElementById('dkActive').textContent = active;
+    document.getElementById('dkExpired').textContent = expired;
+    document.getElementById('dkMissing').textContent = missing;
+    if (Object.keys(devices).length === 0) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-key"></i> No cloudphone accounts found</div>';
+        return;
+    }
+    let html = '';
+    for (const [did, pkgs] of Object.entries(devices)) {
+        const pkgCards = pkgs.map(k => {
+            let badge = '<span class="badge badge-idle" style="font-size:10px">No Key</span>';
+            let expiresLabel = '—';
+            if (k.has_key && k.expires_in > 0) {
+                const h = Math.floor(k.expires_in / 3600);
+                const m = Math.floor((k.expires_in % 3600) / 60);
+                badge = '<span class="badge badge-success" style="font-size:10px"><i class="fas fa-check-circle"></i> Active</span>';
+                expiresLabel = `${h}h ${m}m`;
+            } else if (k.expires_in === 0) {
+                badge = '<span class="badge badge-danger" style="font-size:10px">Expired</span>';
+                expiresLabel = 'Expired';
+            }
+            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border-color)">
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;font-weight:500;color:var(--text-primary)">${esc(k.account_name)}</div>
+                    <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">${esc(k.package)}</div>
+                    <div style="margin-top:4px">${badge} <span style="font-size:10px;color:var(--text-muted);margin-left:6px">${esc(expiresLabel)}</span></div>
+                </div>
+                <button class="btn btn-sm btn-primary" onclick="cloudphoneDeltaKey('${esc(did)}','${esc(k.package)}')" title="Get Delta Key">
+                    <i class="fas fa-key"></i>
+                </button>
+            </div>`;
+        }).join('');
+        html += `<div class="card" style="overflow:hidden">
+            <div class="card-header" style="padding:10px 14px">
+                <h3 style="font-size:13px"><i class="fas fa-mobile-alt"></i> ${esc(did)}</h3>
+                <span style="font-size:11px;color:var(--text-muted)">${pkgs.length} package${pkgs.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="card-body" style="padding:10px 14px;display:grid;gap:8px">
+                ${pkgCards}
+            </div>
+        </div>`;
+    }
+    grid.innerHTML = html;
+}
+
+async function loadDeltaLogs() {
+    const container = document.getElementById('deltaLogsContainer');
+    if (!container) return;
+    const res = await api('GET', '/api/remote/delta-logs?limit=50');
+    if (!res || !res.logs || !res.logs.length) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-history"></i> No logs yet</div>';
+        return;
+    }
+    container.innerHTML = '<table class="table table-fullwidth" style="font-size:11px"><thead><tr><th>Time</th><th>Device</th><th>Account</th><th>Status</th><th>Key</th><th>Message</th></tr></thead><tbody>' +
+        res.logs.map(l => {
+            const t = l.time ? new Date(l.time * 1000).toLocaleTimeString('id-ID', { hour12: false }) : '?';
+            let statusIcon = '';
+            if (l.status === 'success') statusIcon = '<span style="color:var(--green)"><i class="fas fa-check-circle"></i></span>';
+            else if (l.status === 'injected') statusIcon = '<span style="color:var(--green)"><i class="fas fa-syringe"></i></span>';
+            else if (l.status === 'inject_failed') statusIcon = '<span style="color:var(--red)"><i class="fas fa-times-circle"></i></span>';
+            else if (l.status === 'redirect') statusIcon = '<span style="color:var(--yellow)"><i class="fas fa-external-link-alt"></i></span>';
+            else statusIcon = '<span style="color:var(--red)"><i class="fas fa-times-circle"></i></span>';
+            return `<tr>
+                <td style="white-space:nowrap">${esc(t)}</td>
+                <td style="font-family:var(--font-mono);font-size:10px">${esc(l.device_id || '')}</td>
+                <td>${esc(l.account || '')}</td>
+                <td>${statusIcon} <span style="font-size:10px">${esc(l.status)}</span></td>
+                <td style="font-family:var(--font-mono);font-size:10px">${esc(l.key_preview || '')}</td>
+                <td style="color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(l.message || '')}</td>
+            </tr>`;
+        }).join('') + '</tbody></table>';
 }
 
 async function cloudphoneDeltaKey(deviceId, pkg) {
