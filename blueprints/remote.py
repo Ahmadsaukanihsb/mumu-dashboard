@@ -364,3 +364,42 @@ def remote_devices():
             )
             log_activity(f'[Webhook] Device {did} marked OFFLINE')
     return jsonify({'devices': result, 'count': len(result), 'online': sum(1 for d in result if d['online'])})
+
+
+@remote_bp.route('/api/remote/delta-key-bypass', methods=['POST'])
+def remote_delta_key_bypass():
+    data = request.json or {}
+    url = data.get('url', '')
+    if not url:
+        return jsonify({'error': 'url required'}), 400
+    from services.delta import delta_bypass_url
+    result = delta_bypass_url(url)
+    if result and result.get('key'):
+        return jsonify({'key': result['key']})
+    if result and result.get('redirect'):
+        return jsonify({'redirect': result['redirect']})
+    return jsonify({'error': 'Bypass failed'}), 400
+
+
+@remote_bp.route('/api/remote/delta-key/<device_id>/<package>', methods=['POST'])
+def remote_delta_key_queue(device_id, package):
+    from urllib.parse import unquote
+    device_id = unquote(device_id)
+    package = unquote(package)
+    from blueprints.mailbox import mailbox_commands, mailbox_results, command_lock
+    cmd_id = f'delta-{int(time.time() * 1000)}'
+    acc = next((a for a in accounts if a.get('device_id') == device_id and a.get('package_name') == package), None)
+    command = {
+        'id': cmd_id,
+        'type': 'delta_key',
+        'account': acc.get('name', '') if acc else package,
+        'package': package,
+        'device_id': device_id,
+        'timestamp': time.time(),
+        'status': 'pending'
+    }
+    with command_lock:
+        mailbox_commands.append(command)
+        mailbox_results[cmd_id] = {'status': 'pending', 'message': 'Menunggu remote monitor...'}
+    log_activity(f'Delta key queued: {package} on {device_id}')
+    return jsonify({'success': True, 'command_id': cmd_id, 'message': f'Delta key queued for {package}'})

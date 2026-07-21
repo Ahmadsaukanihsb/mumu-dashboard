@@ -271,6 +271,101 @@ class RootMonitor:
         print(f'[RESET] Failed to clear {package}: {out}')
         return False
 
+    def delta_get_link_from_ui(self, package='com.roblox.client'):
+        code, out = self.su_cmd('uiautomator dump --compressed /data/local/tmp/delta_ui.xml 2>/dev/null; cat /data/local/tmp/delta_ui.xml 2>/dev/null; rm -f /data/local/tmp/delta_ui.xml')
+        if code == 0 and out:
+            urls = re.findall(r'https?://[^\s"\'<>]+', out)
+            for u in urls:
+                low = u.lower()
+                if any(k in low for k in ['key', 'verify', 'delta', 'linkvertise', 'the model', 'bypass', 'executor']):
+                    return u
+            if urls:
+                return urls[0]
+        return None
+
+    def delta_get_link_from_logcat(self, package='com.roblox.client'):
+        code, out = self.su_cmd('logcat -d 2>/dev/null')
+        if code == 0:
+            urls = set()
+            for line in out.split('\n'):
+                for u in re.findall(r'https?://[^\s"\'<>)]+', line):
+                    low = u.lower()
+                    if any(k in low for k in ['key', 'verify', 'delta', 'linkvertise', 'the model', 'bypass', 'executor']):
+                        return u
+                    if 'roblox' not in low:
+                        urls.add(u)
+            for u in sorted(urls, key=len):
+                return u
+        return None
+
+    def delta_capture_url(self, package='com.roblox.client'):
+        for fn in [self.delta_get_link_from_ui, self.delta_get_link_from_logcat]:
+            url = fn(package)
+            if url:
+                return url
+        return None
+
+    def delta_find_button(self, label):
+        code, out = self.su_cmd('uiautomator dump --compressed /data/local/tmp/delta_btn.xml 2>/dev/null; cat /data/local/tmp/delta_btn.xml 2>/dev/null; rm -f /data/local/tmp/delta_btn.xml')
+        if code == 0 and out:
+            label_lower = label.lower()
+            for node in re.finditer(r'<node\s+([^>]+?)/?\s*>', out):
+                attrs = node.group(1)
+                text = re.search(r'text="([^"]*)"', attrs)
+                cd = re.search(r'content-desc="([^"]*)"', attrs)
+                txt = ((text.group(1) if text else '') + ' ' + (cd.group(1) if cd else '')).lower()
+                if label_lower not in txt:
+                    continue
+                bounds = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', attrs)
+                if bounds:
+                    cx = (int(bounds.group(1)) + int(bounds.group(3))) // 2
+                    cy = (int(bounds.group(2)) + int(bounds.group(4))) // 2
+                    return cx, cy
+        return None
+
+    def delta_inject_key(self, key):
+        pt = self.delta_find_button('KEY')
+        if pt:
+            self.su_cmd(f'input tap {pt[0]} {pt[1]}')
+        else:
+            self.su_cmd('input tap 540 960')
+        time.sleep(1)
+        key_part = key[:20]
+        self.su_cmd(f'input text {key_part}')
+        if len(key) > 20:
+            time.sleep(0.3)
+            self.su_cmd(f'input text {key[20:]}')
+        time.sleep(1)
+        verify_pt = self.delta_find_button('VERIFY')
+        if not verify_pt:
+            verify_pt = self.delta_find_button('SUBMIT')
+        if verify_pt:
+            self.su_cmd(f'input tap {verify_pt[0]} {verify_pt[1]}')
+        return True
+
+    def delta_auto_get_key(self, package):
+        print(f'[DELTA] Capturing key URL for {package}...')
+        url = self.delta_capture_url(package)
+        if not url:
+            print(f'[DELTA] No URL found')
+            return None, 'No URL found'
+        print(f'[DELTA] URL: {url[:80]}...')
+        result = self.http_post('/api/remote/delta-key-bypass', {
+            'device_id': self.device_id,
+            'package': package,
+            'url': url
+        })
+        if result and result.get('key'):
+            key = result['key']
+            print(f'[DELTA] Key received: {key[:20]}...')
+            self.delta_inject_key(key)
+            print(f'[DELTA] Key injected successfully')
+            return key, None
+        if result and result.get('redirect'):
+            print(f'[DELTA] Redirect to: {result["redirect"]}')
+            return None, result.get('redirect')
+        return None, result.get('error', 'Bypass failed')
+
     def extract_cookie(self, package='com.roblox.client'):
         paths = [
             f'/data/data/{package}/shared_prefs/roblox.xml',
@@ -628,6 +723,8 @@ class RootMonitor:
                     self._execute_gift(account_name, cmd)
                 elif cmd_type == 'reset_app':
                     self._execute_reset_command(account_name, cmd)
+                elif cmd_type == 'delta_key':
+                    self._execute_delta_key_command(account_name, cmd)
                 self.complete_command(cmd_id, True, 'Executed')
             except Exception as e:
                 self.complete_command(cmd_id, False, str(e))
@@ -672,6 +769,18 @@ class RootMonitor:
                 print(f'[{account_name}] Rejoin after reset → {link[:80]}...')
         else:
             print(f'[{account_name}] App reset failed')
+
+    def _execute_delta_key_command(self, account_name, cmd):
+        package = cmd.get('package', '')
+        if not package:
+            print(f'[{account_name}] Delta key command missing package')
+            return
+        print(f'[{account_name}] Getting Delta key for {package}...')
+        key, err = self.delta_auto_get_key(package)
+        if key:
+            print(f'[{account_name}] Delta key obtained: {key[:20]}...')
+        else:
+            print(f'[{account_name}] Delta key failed: {err}')
 
 
 CONFIG_PATH = '/sdcard/Download/dashboard_config.json'

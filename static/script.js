@@ -2094,6 +2094,7 @@ async function loadDevices() {
                             <i class="fas ${statusIcon}" style="color:${statusColor};font-size:8px"></i>
                             <span>${esc(p.label)}</span>
                             ${p.account ? `<span style="color:var(--text-muted);font-size:9px">${esc(p.account.split('-')[0])}</span>` : ''}
+                            ${p.account ? `<button class="btn btn-sm" style="padding:1px 5px;font-size:9px;margin-left:2px" onclick="event.stopPropagation();cloudphoneDeltaKey('${esc(d.device_id)}','${esc(p.package)}')" title="Get Delta Key"><i class="fas fa-key"></i></button>` : ''}
                         </div>`;
                     }).join('')}
                 </div>
@@ -2110,6 +2111,16 @@ function startDevicesAutoRefresh() {
 
 function stopDevicesAutoRefresh() {
     if (_devicesAutoRefresh) { clearInterval(_devicesAutoRefresh); _devicesAutoRefresh = null; }
+}
+
+async function cloudphoneDeltaKey(deviceId, pkg) {
+    if (!confirm(`Get Delta Key for ${esc(pkg)} on ${esc(deviceId)}?`)) return;
+    const res = await api('POST', `/api/remote/delta-key/${encodeURIComponent(deviceId)}/${encodeURIComponent(pkg)}`, {});
+    if (res && res.success) {
+        showToast(`Delta Key queued for ${esc(pkg)}`, 'success');
+    } else {
+        showToast(`Error: ${res?.error || 'Unknown'}`, 'error');
+    }
 }
 
 // ==================== SCRIPT TABS ====================
