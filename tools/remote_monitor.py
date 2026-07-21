@@ -343,16 +343,148 @@ class RootMonitor:
             self.su_cmd(f'input tap {verify_pt[0]} {verify_pt[1]}')
         return True
 
-    def delta_auto_get_key(self, package):
-        print(f'[DELTA] Capturing key URL for {package}...')
-        url = self.delta_capture_url(package)
+    def find_delta_package(self):
+        code, out = self.su_cmd('pm list packages')
+        if code == 0 and out:
+            for line in out.split('\n'):
+                pkg = line.replace('package:', '').strip()
+                if 'delta' in pkg.lower():
+                    return pkg
+        candidates = [
+            'com.delta.executor',
+            'delta.executor',
+            'com.delta.app',
+            'com.delta.lua',
+            'com.delta',
+        ]
+        for c in candidates:
+            code2, _ = self.su_cmd(f'pm path {c} 2>/dev/null')
+            if code2 == 0:
+                return c
+        return 'com.delta.executor'
+
+    def delta_launch_and_capture_url(self, delta_pkg):
+        print(f'[DELTA] Launching {delta_pkg}...')
+        self.su_cmd(f'am force-stop {delta_pkg}')
+        time.sleep(1)
+        self.su_cmd(f'monkey -p {delta_pkg} 1')
+        time.sleep(5)
+
+        disp_w, disp_h = 720, 1280
+        code, out = self.su_cmd('wm size')
+        if code == 0:
+            m = re.search(r'(\d+)x(\d+)', out)
+            if m:
+                pw, ph = int(m.group(1)), int(m.group(2))
+                code2, out2 = self.su_cmd('dumpsys display')
+                if code2 == 0:
+                    ov = re.search(r'OverrideDisplayInfo.*?real (\d+) x (\d+)', out2, re.DOTALL)
+                    if ov:
+                        disp_w, disp_h = int(ov.group(1)), int(ov.group(2))
+                    elif 'orientation=1' in out2 or 'orientation=3' in out2:
+                        disp_w, disp_h = ph, pw
+                    else:
+                        disp_w, disp_h = pw, ph
+                else:
+                    disp_w, disp_h = pw, ph
+
+        self.su_cmd('logcat -c 2>/dev/null')
+
+        rx, ry = int(disp_w * 0.835), int(disp_h * 0.657)
+        print(f'[DELTA] Tapping key area at ~({rx},{ry})...')
+        for dy in (-30, 0, 30):
+            for dx in (-50, 0, 50):
+                tx = rx + dx
+                ty = ry + dy
+                if 0 <= tx < disp_w and 0 <= ty < disp_h:
+                    self.su_cmd(f'input tap {tx} {ty}')
+                    time.sleep(0.15)
+
+        time.sleep(3)
+        url = None
+        for attempt in range(6):
+            code, out = self.su_cmd('logcat -d -s ActivityTaskManager 2>/dev/null')
+            if code == 0 and out:
+                for line in out.split('\n'):
+                    if 'ACTION_VIEW' in line and 'http' in line:
+                        for u in re.findall(r'https?://[^\s"\'<>)]+', line.replace('...', '')):
+                            low = u.lower()
+                            if any(k in low for k in [
+                                'linkvertise', 'lootlabs', 'gateway', 'bypass', 'key',
+                                'verify', 'delta', 'executor', 'platorelay', 'auth.'
+                            ]):
+                                url = u
+                                print(f'[DELTA] URL from logcat intent: {u[:120]}...')
+                                break
+                        if url:
+                            break
+            if url:
+                break
+            time.sleep(1)
+
         if not url:
-            print(f'[DELTA] No URL found')
-            return None, 'No URL found'
+            print('[DELTA] Scanning full logcat...')
+            code, out = self.su_cmd('logcat -d 2>/dev/null')
+            if code == 0 and out:
+                for line in out.split('\n'):
+                    if 'http' in line.lower() and 'ACTION_VIEW' in line:
+                        for u in re.findall(r'https?://[^\s"\'<>)]+', line.replace('...', '')):
+                            low = u.lower()
+                            if any(k in low for k in [
+                                'linkvertise', 'lootlabs', 'gateway', 'bypass',
+                                'key', 'verify', 'delta', 'executor', 'platorelay', 'auth.'
+                            ]):
+                                url = u
+                                print(f'[DELTA] URL from full logcat: {u[:120]}...')
+                                break
+                        if url:
+                            break
+
+        if not url:
+            print('[DELTA] Scanning dumpsys recents...')
+            code, out = self.su_cmd('dumpsys activity recents 2>/dev/null')
+            if code == 0 and out:
+                for u in re.findall(r'https?://[^\s"\'<>)]+', out):
+                    low = u.lower()
+                    if any(k in low for k in [
+                        'linkvertise', 'lootlabs', 'gateway', 'bypass', 'key',
+                        'verify', 'delta', 'executor', 'platorelay', 'auth.'
+                    ]):
+                        url = u
+                        print(f'[DELTA] URL from dumpsys: {u[:120]}...')
+                        break
+
+        if not url:
+            print('[DELTA] Scanning UI dump as fallback...')
+            url = self.delta_get_link_from_ui()
+
+        if not url:
+            print('[DELTA] Scanning general logcat as last fallback...')
+            url = self.delta_get_link_from_logcat()
+
+        if url:
+            print(f'[DELTA] URL captured: {url[:120]}...')
+            return url
+        return None
+
+    def delta_auto_get_key(self, package=None):
+        delta_pkg = self.find_delta_package()
+        print(f'[DELTA] Delta package: {delta_pkg}')
+        print(f'[DELTA] Opening Delta and capturing key URL...')
+        url = self.delta_launch_and_capture_url(delta_pkg)
+        if url:
+            print(f'[DELTA] Closing Chrome to prevent intercept...')
+            self.su_cmd('am force-stop com.android.chrome 2>/dev/null')
+            time.sleep(1)
+        if not url:
+            print(f'[DELTA] No URL found via launch method, trying passive capture...')
+            url = self.delta_capture_url()
+        if not url:
+            return None, 'No key URL found'
         print(f'[DELTA] URL: {url[:80]}...')
         result = self.http_post('/api/remote/delta-key-bypass', {
             'device_id': self.device_id,
-            'package': package,
+            'package': package or delta_pkg,
             'url': url
         })
         if result and result.get('key'):
