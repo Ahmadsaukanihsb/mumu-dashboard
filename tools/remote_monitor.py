@@ -324,7 +324,11 @@ class RootMonitor:
         return None
 
     def delta_inject_key(self, key):
-        pt = self.delta_find_button('KEY')
+        pt = self.delta_find_button('Enter key')
+        if not pt:
+            pt = self.delta_find_button('KEY')
+        if not pt:
+            pt = self.delta_find_button('enter')
         if pt:
             self.su_cmd(f'input tap {pt[0]} {pt[1]}')
         else:
@@ -336,7 +340,9 @@ class RootMonitor:
             time.sleep(0.3)
             self.su_cmd(f'input text {key[20:]}')
         time.sleep(1)
-        verify_pt = self.delta_find_button('VERIFY')
+        verify_pt = self.delta_find_button('Continue')
+        if not verify_pt:
+            verify_pt = self.delta_find_button('VERIFY')
         if not verify_pt:
             verify_pt = self.delta_find_button('SUBMIT')
         if verify_pt:
@@ -368,7 +374,7 @@ class RootMonitor:
         self.su_cmd(f'am force-stop {delta_pkg}')
         time.sleep(1)
         self.su_cmd(f'monkey -p {delta_pkg} 1')
-        time.sleep(5)
+        time.sleep(8)
 
         disp_w, disp_h = 720, 1280
         code, out = self.su_cmd('wm size')
@@ -388,21 +394,29 @@ class RootMonitor:
                 else:
                     disp_w, disp_h = pw, ph
 
+        print(f'[DELTA] Screen: {disp_w}x{disp_h}')
+
         self.su_cmd('logcat -c 2>/dev/null')
 
-        rx, ry = int(disp_w * 0.835), int(disp_h * 0.657)
-        print(f'[DELTA] Tapping key area at ~({rx},{ry})...')
-        for dy in (-30, 0, 30):
-            for dx in (-50, 0, 50):
-                tx = rx + dx
-                ty = ry + dy
-                if 0 <= tx < disp_w and 0 <= ty < disp_h:
-                    self.su_cmd(f'input tap {tx} {ty}')
-                    time.sleep(0.15)
+        receive_key_pt = self.delta_find_button('Receive Key')
+        if not receive_key_pt:
+            receive_key_pt = self.delta_find_button('receive')
+        if not receive_key_pt:
+            receive_key_pt = self.delta_find_button('key')
+        if receive_key_pt:
+            print(f'[DELTA] Found "Receive Key" button at ({receive_key_pt[0]},{receive_key_pt[1]})')
+        else:
+            print(f'[DELTA] Button not found via UI dump, using coordinate fallback')
+            rx, ry = int(disp_w * 0.835), int(disp_h * 0.365)
+            receive_key_pt = (rx, ry)
+            print(f'[DELTA] Fallback tap at ({rx},{ry})')
 
+        self.su_cmd(f'input tap {receive_key_pt[0]} {receive_key_pt[1]}')
+        print(f'[DELTA] Tapped "Receive Key"')
         time.sleep(3)
+
         url = None
-        for attempt in range(6):
+        for attempt in range(8):
             code, out = self.su_cmd('logcat -d -s ActivityTaskManager 2>/dev/null')
             if code == 0 and out:
                 for line in out.split('\n'):
@@ -411,10 +425,11 @@ class RootMonitor:
                             low = u.lower()
                             if any(k in low for k in [
                                 'linkvertise', 'lootlabs', 'gateway', 'bypass', 'key',
-                                'verify', 'delta', 'executor', 'platorelay', 'auth.'
+                                'verify', 'delta', 'executor', 'platorelay', 'auth.',
+                                'notification', 'fluxus', 'weaken', 'survey'
                             ]):
                                 url = u
-                                print(f'[DELTA] URL from logcat intent: {u[:120]}...')
+                                print(f'[DELTA] URL from logcat intent: {u[:150]}')
                                 break
                         if url:
                             break
@@ -432,10 +447,11 @@ class RootMonitor:
                             low = u.lower()
                             if any(k in low for k in [
                                 'linkvertise', 'lootlabs', 'gateway', 'bypass',
-                                'key', 'verify', 'delta', 'executor', 'platorelay', 'auth.'
+                                'key', 'verify', 'delta', 'executor', 'platorelay',
+                                'auth.', 'notification', 'fluxus'
                             ]):
                                 url = u
-                                print(f'[DELTA] URL from full logcat: {u[:120]}...')
+                                print(f'[DELTA] URL from full logcat: {u[:150]}...')
                                 break
                         if url:
                             break
@@ -448,23 +464,24 @@ class RootMonitor:
                     low = u.lower()
                     if any(k in low for k in [
                         'linkvertise', 'lootlabs', 'gateway', 'bypass', 'key',
-                        'verify', 'delta', 'executor', 'platorelay', 'auth.'
+                        'verify', 'delta', 'executor', 'platorelay', 'auth.',
+                        'notification', 'fluxus'
                     ]):
                         url = u
-                        print(f'[DELTA] URL from dumpsys: {u[:120]}...')
+                        print(f'[DELTA] URL from dumpsys: {u[:150]}...')
                         break
 
         if not url:
-            print('[DELTA] Scanning UI dump as fallback...')
+            print('[DELTA] Scanning UI dump...')
             url = self.delta_get_link_from_ui()
 
-        if not url:
-            print('[DELTA] Scanning general logcat as last fallback...')
-            url = self.delta_get_link_from_logcat()
-
         if url:
-            print(f'[DELTA] URL captured: {url[:120]}...')
+            print(f'[DELTA] URL captured: {url[:150]}...')
+            self.su_cmd('am force-stop com.android.chrome 2>/dev/null')
+            time.sleep(1)
             return url
+
+        print('[DELTA] No URL found - Delta key overlay may not have loaded')
         return None
 
     def delta_auto_get_key(self, package=None):
