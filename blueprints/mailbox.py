@@ -1,5 +1,6 @@
 import json, time, threading
 import urllib.request, urllib.error
+import uuid as _uuid
 from flask import Blueprint, jsonify, request
 from models import settings, inventory_data, harvested_fruits_data, accounts, log_activity
 from tools.fruit_values import FRUIT_VALUES, calculate_fruits_for_value, format_value
@@ -313,8 +314,8 @@ def send_gift():
     if target_id == 0:
         return jsonify({'error': f'User "{target_username}" tidak ditemukan'}), 400
     
-    cmd_id = f"gift_{int(time.time() * 1000)}"
-    
+    cmd_id = f"gift_{_uuid.uuid4().hex[:12]}"
+
     command = {
         'id': cmd_id,
         'type': 'send_gift',
@@ -338,6 +339,64 @@ def send_gift():
         'command_id': cmd_id,
         'message': f'Gift queued for {target_username}',
         'target_id': target_id
+    })
+
+@mailbox_bp.route('/api/mailbox/send-gift-batch', methods=['POST'])
+def send_gift_batch():
+    """Queue multiple gift items as ONE command (1 lookup, 1 queue entry)."""
+    data = request.json or {}
+    account = data.get('account', '')
+    target_username = data.get('targetUsername', '')
+    items = data.get('items', [])  # [{'id': '...', 'name': '...', 'note': '...'}, ...]
+    note = data.get('note', '')
+
+    if not account:
+        return jsonify({'error': 'Pilih akun dulu'}), 400
+    if not target_username:
+        return jsonify({'error': 'Username target required'}), 400
+    if not items:
+        return jsonify({'error': 'Items kosong'}), 400
+
+    # Single lookup for all items
+    target_id = lookup_user_id(target_username)
+    if target_id == 0:
+        return jsonify({'error': f'User "{target_username}" tidak ditemukan'}), 400
+
+    cmd_id = f"giftb_{_uuid.uuid4().hex[:12]}"
+
+    gift_items = []
+    for item in items:
+        iid = item.get('id', '')
+        if iid:
+            gift_items.append({'id': iid, 'name': item.get('name', iid)})
+
+    if not gift_items:
+        return jsonify({'error': 'Tidak ada item dengan ID valid'}), 400
+
+    command = {
+        'id': cmd_id,
+        'type': 'send_gift_batch',
+        'account': account,
+        'target': target_username,
+        'target_id': target_id,
+        'items': gift_items,
+        'note': note or 'Gift from dashboard',
+        'timestamp': time.time(),
+        'status': 'pending'
+    }
+
+    with command_lock:
+        mailbox_commands.append(command)
+        mailbox_results[cmd_id] = {'status': 'pending', 'message': f'Menunggu executor... ({len(gift_items)} items)'}
+
+    log_activity(f'[Gift] Batch queued: {len(gift_items)} items → {target_username} (ID: {target_id})')
+
+    return jsonify({
+        'success': True,
+        'command_id': cmd_id,
+        'message': f'Batch gift queued: {len(gift_items)} items → {target_username}',
+        'target_id': target_id,
+        'items_count': len(gift_items)
     })
 
 @mailbox_bp.route('/api/mailbox/commands', methods=['GET'])

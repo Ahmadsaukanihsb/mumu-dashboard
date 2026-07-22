@@ -3203,50 +3203,57 @@ async function loadHarvestFruits() {
 async function sendHarvestFruits() {
     const account = document.getElementById('mailboxAccountSelect').value;
     const target = mailboxTargets[0];
-    
+
     if (!account) { showToast('Pilih akun dulu', 'warning'); return; }
     if (!target) { showToast('Tambah target dulu', 'warning'); return; }
     if (harvestSelectedFruits.length === 0) { showToast('Pilih fruits yang mau dikirim', 'warning'); return; }
-    
+
     const btn = document.getElementById('btnSendHarvestFruits');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim...';
-    
-    let successCount = 0;
-    let failCount = 0;
-    
-    for (const fruit of harvestSelectedFruits) {
-        if (!fruit.id || fruit.id === '') {
-            failCount++;
-            continue;
-        }
-        
-        try {
-            const sendResp = await api('POST', '/api/mailbox/send-gift', {
-                account,
-                targetUsername: target,
-                itemId: fruit.id,
-                note: `Harvest fruit: ${fruit.fruitName}${fruit.mutation !== 'None' ? ' [' + fruit.mutation + ']' : ''}`
-            });
-            
-            if (sendResp.success) {
-                successCount++;
-            } else {
-                failCount++;
-            }
-        } catch (e) {
-            failCount++;
-        }
+
+    // Build items array (filter valid IDs)
+    const items = harvestSelectedFruits
+        .filter(f => f.id && f.id !== '')
+        .map(f => ({ id: f.id, name: f.fruitName }));
+
+    const skipped = harvestSelectedFruits.length - items.length;
+    if (skipped > 0) {
+        showToast(`${skipped} fruit dilewati (tidak ada ID)`, 'warning');
     }
-    
-    showToast(`Selesai! ${successCount} terkirim, ${failCount} gagal`, successCount > 0 ? 'success' : 'error');
-    addMailboxHistory(successCount > 0 ? 'send' : 'failed', harvestSelectedFruits.length, target,
-        `Harvest fruits: ${successCount} ok, ${failCount} gagal`);
-    
-    // Clear sent items from selection
+
+    if (items.length === 0) {
+        showToast('Tidak ada fruit dengan ID valid', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim Selected Fruits';
+        return;
+    }
+
+    try {
+        const res = await api('POST', '/api/mailbox/send-gift-batch', {
+            account,
+            targetUsername: target,
+            items,
+            note: 'Harvest fruits from dashboard'
+        });
+
+        if (res && res.success) {
+            showToast(`${res.items_count} fruits queued → ${target} (ID: ${res.target_id})`, 'success');
+            addMailboxHistory('send', items.length, target, `Batch gift: ${items.length} fruits`);
+            pollCommandResult(res.command_id, target);
+        } else {
+            showToast('Gagal: ' + (res?.error || 'unknown'), 'error');
+            addMailboxHistory('failed', items.length, target, res?.error || 'unknown');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+        addMailboxHistory('failed', items.length, target, e.message);
+    }
+
+    // Clear selection
     harvestSelectedFruits = [];
     renderHarvestFruitList();
-    
+
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim Selected Fruits';
 }

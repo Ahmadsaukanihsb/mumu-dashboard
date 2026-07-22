@@ -323,28 +323,76 @@ task.spawn(function()
             local targetId = cmd.target_id
             local itemId = cmd.item_id
             local note = cmd.note or "Gift from dashboard"
-            
+
             if not targetId or targetId == 0 or not itemId or itemId == "" then
                 local resultData = HttpService:JSONEncode({{success=false, message="Invalid target or item ID"}})
                 httpPost(URL .. "/api/mailbox/commands/" .. cmd.id .. "/complete", resultData)
                 return
             end
-            
+
             notify("Gifting " .. itemId .. " -> " .. cmd.target, 5)
             local ok, success, msg = pcall(function()
                 return gifting.Send:Fire(targetId, itemId, note)
             end)
-            
-            local resultMsg = ok and "Gift sent" or "Gift failed: " .. tostring(msg)
+
+            local giftOk = ok and (success == true or success == nil)
+            local resultMsg = giftOk and "Gift sent" or ("Gift failed: " .. tostring(msg or success or "unknown"))
             local resultData = HttpService:JSONEncode({{
-                success = ok or false,
+                success = giftOk,
                 message = resultMsg
             }})
             httpPost(URL .. "/api/mailbox/commands/" .. cmd.id .. "/complete", resultData)
             notify(resultMsg, 5)
             return
         end
-        
+
+        if cmd.type == "send_gift_batch" then
+            local targetId = cmd.target_id
+            local note = cmd.note or "Gift from dashboard"
+            local giftItems = cmd.items or {{}}
+
+            if not targetId or targetId == 0 or #giftItems == 0 then
+                local resultData = HttpService:JSONEncode({{success=false, message="Invalid target or empty items"}})
+                httpPost(URL .. "/api/mailbox/commands/" .. cmd.id .. "/complete", resultData)
+                return
+            end
+
+            notify("Batch gifting " .. #giftItems .. " items -> " .. cmd.target, 5)
+            local successCount = 0
+            local failCount = 0
+            local errors = {{}}
+
+            for i, gItem in ipairs(giftItems) do
+                local itemId = gItem.id or gItem.name or ""
+                if itemId ~= "" then
+                    local ok, success, msg = pcall(function()
+                        return gifting.Send:Fire(targetId, itemId, note)
+                    end)
+                    if ok and (success == true or success == nil) then
+                        successCount = successCount + 1
+                    else
+                        failCount = failCount + 1
+                        table.insert(errors, itemId .. ": " .. tostring(msg or success or "?"))
+                    end
+                else
+                    failCount = failCount + 1
+                end
+                if i < #giftItems then task.wait(0.5) end
+            end
+
+            local resultMsg = successCount .. " ok, " .. failCount .. " gagal"
+            if #errors > 0 then resultMsg = resultMsg .. " (" .. table.concat(errors, "; ") .. ")" end
+            local resultData = HttpService:JSONEncode({{
+                success = failCount == 0,
+                message = resultMsg,
+                sent = successCount,
+                failed = failCount
+            }})
+            httpPost(URL .. "/api/mailbox/commands/" .. cmd.id .. "/complete", resultData)
+            notify(resultMsg, 8)
+            return
+        end
+
         local targetId = cmd.target_id
         
         if not targetId or targetId == 0 then
