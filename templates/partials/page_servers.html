@@ -1,0 +1,25 @@
+                <!-- Servers Page -->
+                <div class="page" id="page-servers">
+                    <div class="page-toolbar">
+                        <div class="page-toolbar-actions">
+                            <button class="btn btn-primary" onclick="showAddServer()"><i class="fas fa-plus"></i> Tambah</button>
+                            <button class="btn btn-secondary" onclick="scanServersFromAccounts()" id="btnScanServers"><i class="fas fa-search"></i> Scan dari Akun</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-fullwidth">
+                            <thead>
+                                <tr>
+                                    <th>Nama</th>
+                                    <th>Tipe</th>
+                                    <th>Place ID</th>
+                                    <th>Link / Code</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="serversTableBody">
+                                <tr><td colspan="5"><div class="empty-state"><i class="fas fa-server"></i> Belum ada server</div></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>

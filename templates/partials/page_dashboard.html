@@ -1,0 +1,147 @@
+                <!-- Dashboard Page -->
+                <div class="page active" id="page-dashboard">
+                    <div class="stats-grid">
+                        <div class="stat-card stat-card-large">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #ff3b4a, #dc2f3b)">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Total Accounts</span>
+                                <span class="stat-value" id="statAccounts">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a)">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Online</span>
+                                <span class="stat-value" id="statOnline" style="color:var(--green)">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626)">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Error</span>
+                                <span class="stat-value" id="statError" style="color:var(--red)">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #00b4d8, #0090b0)">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">VMs Running</span>
+                                <span class="stat-value" id="statVMs">—</span>
+                            </div>
+                        </div>
+                        <div class="stat-card stat-card-accent-robux">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706)">
+                                <i class="fas fa-dollar-sign"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Total Robux</span>
+                                <span class="stat-value" id="statRobux">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card stat-card-accent-key" id="deltaKeyCard">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #00b4d8, #0284c7)">
+                                <i class="fas fa-key"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Delta Key</span>
+                                <span class="stat-value" id="statDeltaKey" style="color:var(--blue)">—</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706)">
+                                <i class="fas fa-coins"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Total Sheckles</span>
+                                <span class="stat-value" id="statSheckles" style="color:var(--yellow)">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a)">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-label">Inventory Value</span>
+                                <span class="stat-value" id="statInventoryValue" style="color:var(--green)">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-users"></i> Daftar Account</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="dash-stats-bar" id="dashStatsBar">
+                                    <div class="dash-stat-chip dash-stat-online"><i class="fas fa-check-circle"></i> <span id="dashOnlineCount">0</span> Online</div>
+                                    <div class="dash-stat-chip dash-stat-ingame"><i class="fas fa-gamepad"></i> <span id="dashIngameCount">0</span> In-Game</div>
+                                    <div class="dash-stat-chip dash-stat-error"><i class="fas fa-exclamation-triangle"></i> <span id="dashErrorCount">0</span> Error</div>
+                                    <div class="dash-stat-chip dash-stat-total"><i class="fas fa-users"></i> <span id="dashTotalCount">0</span> Total</div>
+                                </div>
+                                <div id="dashAccountsList">
+                                    <div class="empty-state"><i class="fas fa-users"></i> Belum ada account</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-clock"></i> Activity Terbaru</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="activity-timeline" id="dashActivityList">
+                                    <div class="empty-state"><i class="fas fa-clock"></i> Belum ada aktivitas</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-cloud-sun"></i> Game Status</h3>
+                                <button class="btn btn-sm btn-secondary" onclick="refreshGameStatus()"><i class="fas fa-sync-alt"></i></button>
+                            </div>
+                            <div class="card-body" id="gameStatusContent">
+                                <div class="game-status-weather" id="currentWeather">
+                                    <div class="weather-icon">🌤️</div>
+                                    <div class="weather-info">
+                                        <div class="weather-name">Clear</div>
+                                        <div class="weather-effect">No active weather event</div>
+                                    </div>
+                                </div>
+                                <div class="weather-selector" id="weatherSelector">
+                                    <div class="weather-title">Set Weather:</div>
+                                    <div class="weather-options" id="weatherOptions"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-calendar-alt"></i> Seasonal Events</h3>
+                            </div>
+                            <div class="card-body" id="seasonalEventsContent">
+                                <div class="empty-state"><i class="fas fa-calendar"></i> Loading events...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dash-section">
+                        <div class="card" style="grid-column: 1 / -1;">
+                            <div class="card-header">
+                                <h3><i class="fas fa-camera"></i> VM Screenshots</h3>
+                                <button class="btn btn-sm btn-secondary" onclick="refreshAllScreenshots()"><i class="fas fa-sync-alt"></i> Refresh All</button>
+                            </div>
+                            <div class="card-body" id="screenshotGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+                            </div>
+                        </div>
+                    </div>
+                </div>

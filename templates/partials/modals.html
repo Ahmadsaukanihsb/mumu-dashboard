@@ -1,0 +1,153 @@
+    <!-- Add/Edit Schedule Modal -->
+    <div class="modal" id="scheduleModal">
+        <div class="modal-backdrop" onclick="closeModal('scheduleModal')"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="scheduleModalTitle"><i class="fas fa-clock"></i> Add Schedule</h3>
+                <button class="modal-close" onclick="closeModal('scheduleModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editScheduleId">
+                <div class="form-group">
+                    <label>Account (Pengirim)</label>
+                    <select class="input" id="schedAccount"></select>
+                </div>
+                <div class="form-group">
+                    <label>Target Username</label>
+                    <input type="text" class="input" id="schedTarget" placeholder="Username penerima">
+                </div>
+                <div class="form-group">
+                    <label>Items <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(click items to add, qty = all available)</span></label>
+                    <div id="schedItemsList" style="margin-bottom:8px;max-height:200px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;padding:8px">
+                        <div style="font-size:11px;color:var(--text-muted)">Pilih account untuk load inventory</div>
+                    </div>
+                    <div id="schedSelectedItems" style="margin-top:8px"></div>
+                </div>
+                <div class="form-group">
+                    <label>Time (HH:MM)</label>
+                    <input type="time" class="input" id="schedTime" value="12:00">
+                </div>
+                <div class="form-group">
+                    <label>Repeat</label>
+                    <select class="input" id="schedRepeat">
+                        <option value="once">Once</option>
+                        <option value="daily" selected>Daily</option>
+                        <option value="every_2">Every 2 hours</option>
+                        <option value="every_4">Every 4 hours</option>
+                        <option value="every_6">Every 6 hours</option>
+                        <option value="every_12">Every 12 hours</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('scheduleModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah/Edit Account -->
+    <div class="modal" id="accountModal">
+        <div class="modal-backdrop" onclick="closeModal('accountModal')"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="accountModalTitle"><i class="fas fa-user-plus"></i> Tambah Account</h3>
+                <button class="modal-close" onclick="closeModal('accountModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editAccountId">
+                <div class="form-group">
+                    <label>Nama Account</label>
+                    <input type="text" class="input" id="accName" placeholder="Account 1">
+                </div>
+                <div class="form-group">
+                    <label>.ROBLOSECURITY Cookie</label>
+                    <div class="input-group">
+                        <input type="password" class="input" id="accCookie" placeholder="Masukkan cookie...">
+                        <button class="btn btn-icon" onclick="togglePassword('accCookie', this)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Assigned Servers <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(centang untuk auto-join)</span></label>
+                    <div class="server-check-list" id="accServerList">
+                        <div style="padding:12px;text-align:center;color:var(--text-muted);font-size:12px">Loading servers...</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Platform</label>
+                    <div style="display:flex;gap:8px;margin-top:4px">
+                        <button type="button" class="btn btn-sm btn-primary" id="btnPlatformCloudphone" onclick="setPlatform('cloudphone')" style="flex:1">
+                            <i class="fas fa-mobile-alt"></i> Cloudphone (Termux/Redfinger)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-secondary" id="btnPlatformMumu" onclick="setPlatform('mumu')" style="flex:1">
+                            <i class="fas fa-desktop"></i> MuMu (Windows VM)
+                        </button>
+                    </div>
+                    <input type="hidden" id="accPlatform" value="cloudphone">
+                </div>
+                <div class="form-group" id="pkgNameGroup">
+                    <label>Package Name <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(auto-filled from remote monitor)</span></label>
+                    <input type="text" class="input" id="accPackage" placeholder="com.roblox.client" style="font-family:monospace;font-size:12px">
+                    <div id="remotePkgButtons" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div>
+                </div>
+                <div class="form-group" id="mumuInstGroup" style="display:none">
+                    <label>MuMu Instance</label>
+                    <select class="input" id="accInstance"></select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('accountModal')"><i class="fas fa-times"></i> Batal</button>
+                <button class="btn btn-primary" onclick="saveAccount()"><i class="fas fa-check"></i> Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah/Edit Server -->
+    <div class="modal" id="serverModal">
+        <div class="modal-backdrop" onclick="closeModal('serverModal')"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="serverModalTitle"><i class="fas fa-server"></i> Tambah Server</h3>
+                <button class="modal-close" onclick="closeModal('serverModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editServerId">
+                <div class="form-group">
+                    <label>Cari Game <span style="font-size:10px;color:var(--text-muted)">(ketik nama game)</span></label>
+                    <div style="display:flex;gap:6px">
+                        <input type="text" class="input" id="svGameSearch" placeholder="Cari game Roblox..." style="flex:1" oninput="searchGame(this.value)">
+                    </div>
+                    <div id="svGameResults" style="max-height:180px;overflow-y:auto;margin-top:4px;border:1px solid var(--border-color);border-radius:6px;display:none"></div>
+                </div>
+                <div class="form-group">
+                    <label>Nama Server</label>
+                    <input type="text" class="input" id="svName" placeholder="My Private Server">
+                </div>
+                <div class="form-group">
+                    <label>Tipe Server</label>
+                    <select class="input" id="svType" onchange="toggleServerFields()">
+                        <option value="public">Public Server</option>
+                        <option value="private">Private Server</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Place ID <span style="font-size:10px;color:var(--text-muted)">(terisi otomatis dari pencarian)</span></label>
+                    <input type="text" class="input" id="svPlaceId" placeholder="4483381587">
+                </div>
+                <div class="form-group private-field" style="display:none">
+                    <label>Server Code / Link Code</label>
+                    <input type="text" class="input" id="svCode" placeholder="abcd1234">
+                </div>
+                <div class="form-group private-field" style="display:none">
+                    <label>Full Private Server Link</label>
+                    <input type="text" class="input" id="svLink" placeholder="https://www.roblox.com/games/...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('serverModal')"><i class="fas fa-times"></i> Batal</button>
+                <button class="btn btn-primary" onclick="saveServer()"><i class="fas fa-check"></i> Simpan</button>
+            </div>
+        </div>
+    </div>

@@ -1,0 +1,47 @@
+                <!-- Instances Page (VMs + Devices) -->
+                <div class="page" id="page-vms">
+                    <!-- Instance Tabs -->
+                    <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--border-color);padding-bottom:12px">
+                        <button class="btn btn-sm btn-primary instance-tab active" data-instance="vms" onclick="switchInstanceTab('vms')">
+                            <i class="fas fa-desktop"></i> VMs
+                        </button>
+                        <button class="btn btn-sm btn-secondary instance-tab" data-instance="devices" onclick="switchInstanceTab('devices')">
+                            <i class="fas fa-mobile-alt"></i> Devices
+                        </button>
+                    </div>
+
+                    <!-- VMs Tab -->
+                    <div class="instance-content active" id="instance-vms">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-desktop"></i> MuMu VM Manager</h3>
+                                <div style="display:flex;gap:8px">
+                                    <button class="btn btn-primary" id="btnStartAllJoin" onclick="startAllAndJoin()"><i class="fas fa-play"></i> Start All & Join</button>
+                                    <button class="btn btn-secondary" onclick="refreshMuMuVMs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="startAllProgress" style="display:none;margin-bottom:12px"></div>
+                                <div id="mumuVMList">
+                                    <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading VMs...</div>
+                                </div>
+                                <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border-color)">
+                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="fas fa-table-cells"></i> Account-VM Map</h4>
+                                    <div id="vmAccountMap"><div class="empty-state" style="padding:20px"><i class="fas fa-spinner fa-pulse"></i> Loading...</div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Devices Tab -->
+                    <div class="instance-content" id="instance-devices" style="display:none">
+                        <div class="page-toolbar">
+                            <div class="page-toolbar-actions">
+                                <button class="btn btn-secondary" onclick="loadDevices()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                            </div>
+                        </div>
+                        <div id="devicesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">
+                            <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading devices...</div>
+                        </div>
+                    </div>
+                </div>

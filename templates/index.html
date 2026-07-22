@@ -109,23 +109,8 @@
                 <a class="nav-item" data-page="servers" onclick="switchPage('servers')">
                     <i class="fas fa-server"></i><span>Servers</span>
                 </a>
-                <a class="nav-item" data-page="activity" onclick="switchPage('activity')">
-                    <i class="fas fa-history"></i><span>Activity</span>
-                </a>
-                <a class="nav-item" data-page="settings" onclick="switchPage('settings')">
-                    <i class="fas fa-cog"></i><span>Settings</span>
-                </a>
                 <a class="nav-item" data-page="vms" onclick="switchPage('vms')">
-                    <i class="fas fa-desktop"></i><span>VMs</span>
-                </a>
-                <a class="nav-item" data-page="devices" onclick="switchPage('devices')">
-                    <i class="fas fa-mobile-alt"></i><span>Devices</span>
-                </a>
-                <a class="nav-item" data-page="scripts" onclick="switchPage('scripts')">
-                    <i class="fas fa-code"></i><span>Scripts</span>
-                </a>
-                <a class="nav-item" data-page="logs" onclick="switchPage('logs')">
-                    <i class="fas fa-clipboard-list"></i><span>Logs</span>
+                    <i class="fas fa-desktop"></i><span>Instances</span>
                 </a>
                 <a class="nav-item" data-page="inventory" onclick="switchPage('inventory')">
                     <i class="fas fa-box-open"></i><span>Inventory</span>
@@ -133,11 +118,14 @@
                 <a class="nav-item" data-page="command" onclick="switchPage('command')">
                     <i class="fas fa-terminal"></i><span>Command</span>
                 </a>
-                <a class="nav-item" data-page="termux" onclick="switchPage('termux')">
-                    <i class="fas fa-mobile-alt"></i><span>Termux Guide</span>
+                <a class="nav-item" data-page="scripts" onclick="switchPage('scripts')">
+                    <i class="fas fa-code"></i><span>Scripts</span>
                 </a>
-                <a class="nav-item" data-page="delta-keys" onclick="switchPage('delta-keys')">
-                    <i class="fas fa-key"></i><span>Delta Keys</span>
+                <a class="nav-item" data-page="logs" onclick="switchPage('logs')">
+                    <i class="fas fa-clipboard-list"></i><span>Logs</span>
+                </a>
+                <a class="nav-item" data-page="settings" onclick="switchPage('settings')">
+                    <i class="fas fa-cog"></i><span>Settings</span>
                 </a>
             </nav>
 
@@ -385,17 +373,6 @@
                 </div>
 
                 <!-- Activity Page -->
-                <div class="page" id="page-activity">
-                    <div class="page-toolbar">
-                        <div class="page-toolbar-actions">
-                            <button class="btn btn-danger" onclick="clearActivity()"><i class="fas fa-trash"></i> Clear</button>
-                        </div>
-                    </div>
-                    <div class="activity-timeline activity-page-timeline" id="activityLog">
-                        <div class="empty-state"><i class="fas fa-history"></i> Belum ada aktivitas</div>
-                    </div>
-                </div>
-
                 <!-- Settings Page -->
                 <div class="page" id="page-settings">
                     <div class="settings-layout">
@@ -405,6 +382,7 @@
                             <button class="settings-tab" data-tab="vm" onclick="switchSettingsTab('vm')"><i class="fas fa-desktop"></i> VM</button>
                             <button class="settings-tab" data-tab="integrations" onclick="switchSettingsTab('integrations')"><i class="fas fa-plug"></i> Integrations</button>
                             <button class="settings-tab" data-tab="security" onclick="switchSettingsTab('security')"><i class="fas fa-shield"></i> Security</button>
+                            <button class="settings-tab" data-tab="help" onclick="switchSettingsTab('help')"><i class="fas fa-question-circle"></i> Help</button>
                         </div>
                         <div class="settings-content">
                             <div class="settings-group active" id="settings-general">
@@ -641,37 +619,51 @@
                 </div>
 
                 <!-- VMs Page -->
+                <!-- Instances Page (VMs + Devices) -->
                 <div class="page" id="page-vms">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3><i class="fas fa-desktop"></i> MuMu VM Manager</h3>
-                            <div style="display:flex;gap:8px">
-                                <button class="btn btn-primary" id="btnStartAllJoin" onclick="startAllAndJoin()"><i class="fas fa-play"></i> Start All & Join</button>
-                                <button class="btn btn-secondary" onclick="refreshMuMuVMs()"><i class="fas fa-sync-alt"></i> Refresh</button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="startAllProgress" style="display:none;margin-bottom:12px"></div>
-                            <div id="mumuVMList">
-                                <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading VMs...</div>
-                            </div>
-                            <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border-color)">
-                                <h4 style="font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="fas fa-table-cells"></i> Account-VM Map</h4>
-                                <div id="vmAccountMap"><div class="empty-state" style="padding:20px"><i class="fas fa-spinner fa-pulse"></i> Loading...</div></div>
-                            </div>
-                        </div>
+                    <!-- Instance Tabs -->
+                    <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--border-color);padding-bottom:12px">
+                        <button class="btn btn-sm btn-primary instance-tab active" data-instance="vms" onclick="switchInstanceTab('vms')">
+                            <i class="fas fa-desktop"></i> VMs
+                        </button>
+                        <button class="btn btn-sm btn-secondary instance-tab" data-instance="devices" onclick="switchInstanceTab('devices')">
+                            <i class="fas fa-mobile-alt"></i> Devices
+                        </button>
                     </div>
-                </div>
 
-                <!-- Devices Page -->
-                <div class="page" id="page-devices">
-                    <div class="page-toolbar">
-                        <div class="page-toolbar-actions">
-                            <button class="btn btn-secondary" onclick="loadDevices()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    <!-- VMs Tab -->
+                    <div class="instance-content active" id="instance-vms">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-desktop"></i> MuMu VM Manager</h3>
+                                <div style="display:flex;gap:8px">
+                                    <button class="btn btn-primary" id="btnStartAllJoin" onclick="startAllAndJoin()"><i class="fas fa-play"></i> Start All & Join</button>
+                                    <button class="btn btn-secondary" onclick="refreshMuMuVMs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="startAllProgress" style="display:none;margin-bottom:12px"></div>
+                                <div id="mumuVMList">
+                                    <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading VMs...</div>
+                                </div>
+                                <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border-color)">
+                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="fas fa-table-cells"></i> Account-VM Map</h4>
+                                    <div id="vmAccountMap"><div class="empty-state" style="padding:20px"><i class="fas fa-spinner fa-pulse"></i> Loading...</div></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div id="devicesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">
-                        <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading devices...</div>
+
+                    <!-- Devices Tab -->
+                    <div class="instance-content" id="instance-devices" style="display:none">
+                        <div class="page-toolbar">
+                            <div class="page-toolbar-actions">
+                                <button class="btn btn-secondary" onclick="loadDevices()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                            </div>
+                        </div>
+                        <div id="devicesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">
+                            <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading devices...</div>
+                        </div>
                     </div>
                 </div>
 
@@ -696,6 +688,9 @@
                         </button>
                         <button class="btn btn-sm btn-secondary script-tab" data-script="autoexec" onclick="switchScriptTab('autoexec')">
                             <i class="fas fa-search"></i> Auto-Execute
+                        </button>
+                        <button class="btn btn-sm btn-secondary script-tab" data-script="delta" onclick="switchScriptTab('delta')">
+                            <i class="fas fa-key"></i> Delta Keys
                         </button>
                     </div>
                     
@@ -770,10 +765,158 @@
                                     <div class="form-group">
                                         <label>Delay (seconds)</label>
                                         <input type="number" class="input" id="scriptDelay" value="8" min="5" max="30" style="font-size:12px">
+                            </div>
+
+                            <div class="settings-group" id="settings-help">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-mobile-alt"></i> Setup Termux (Redfinger)</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">1</span>
+                                            <div>
+                                                <strong>Install Termux</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Download dari F-Droid (bukan Play Store)</p>
+                                                <a href="https://f-droid.org/en/packages/com.termux/" target="_blank" class="btn btn-sm btn-secondary" style="margin-top:4px">
+                                                    <i class="fas fa-download"></i> Download Termux
+                                                </a>
+                                            </div>
+                                        </div>
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">2</span>
+                                            <div>
+                                                <strong>Buka Termux & Jalankan Setup</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Copy-paste command ini di Termux:</p>
+                                                <div class="code-block" style="position:relative;margin-top:8px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">pkg update -y && pkg install python adb git curl cloudflared -y && pip install flask flask-cors werkzeug && git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox && bash ~/dashboard-roblox/tools/setup_termux.sh</pre>
+                                                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">3</span>
+                                            <div>
+                                                <strong>Start Dashboard</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Jalankan dashboard di Termux:</p>
+                                                <div class="code-block" style="position:relative;margin-top:8px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox && bash tools/run_termux.sh</pre>
+                                                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">4</span>
+                                            <div>
+                                                <strong>Start Remote Monitor (Optional)</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Auto-rejoin & monitor untuk Cloudphone accounts:</p>
+                                                <div class="code-block" style="position:relative;margin-top:8px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox/tools && python remote_monitor.py --url https://dashboard.aavpanel.my.id</pre>
+                                                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">5</span>
+                                            <div>
+                                                <strong>Akses dari PC</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Buka browser di PC:</p>
+                                                <div class="code-block" style="position:relative;margin-top:8px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">https://dashboard.aavpanel.my.id</pre>
+                                                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <pre class="code-block code-block-full" id="mailboxScriptOutput" style="max-height:400px;overflow:auto">Klik "Generate" untuk membuat script...</pre>
+
+                                <!-- Remote Monitor Info -->
+                                <div class="card" style="margin-top:16px">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-info-circle"></i> Remote Monitor Info</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                                            <div>
+                                                <h4 style="font-size:13px;font-weight:600;margin-bottom:8px"><i class="fas fa-cog"></i> Yang Dilakukan</h4>
+                                                <ul style="font-size:12px;color:var(--text-secondary);list-style:none;padding:0">
+                                                    <li style="margin-bottom:4px">✓ Auto-discover Roblox packages</li>
+                                                    <li style="margin-bottom:4px">✓ Auto-create accounts di dashboard</li>
+                                                    <li style="margin-bottom:4px">✓ Auto-extract cookies</li>
+                                                    <li style="margin-bottom:4px">✓ Auto-push scripts ke apps</li>
+                                                    <li style="margin-bottom:4px">✓ Auto-rejoin saat kicked/disconnect</li>
+                                                    <li style="margin-bottom:4px">✓ Monitor status ke dashboard</li>
+                                                </ul>
+                                            </div>
+                                            <div>
+                                                <h4 style="font-size:13px;font-weight:600;margin-bottom:8px"><i class="fas fa-exclamation-triangle"></i> Persyaratan</h4>
+                                                <ul style="font-size:12px;color:var(--text-secondary);list-style:none;padding:0">
+                                                    <li style="margin-bottom:4px">✓ Root access di device</li>
+                                                    <li style="margin-bottom:4px">✓ Internet connection</li>
+                                                    <li style="margin-bottom:4px">✓ Roblox apps terinstall</li>
+                                                    <li style="margin-bottom:4px">✓ Delta Executor terinstall</li>
+                                                    <li style="margin-bottom:4px">✓ Dashboard PC running</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Commands Reference -->
+                                <div class="card" style="margin-top:16px">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-code"></i> Commands Reference</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                                            <div>
+                                                <h4 style="font-size:13px;font-weight:600;margin-bottom:8px">Setup</h4>
+                                                <div class="code-block" style="font-size:11px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Install dependencies
+pkg update -y
+pkg install python adb git curl cloudflared
+
+# Install Python packages
+pip install flask flask-cors werkzeug
+
+# Clone project
+git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox
+
+# Setup
+bash ~/dashboard-roblox/tools/setup_termux.sh</pre>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h4 style="font-size:13px;font-weight:600;margin-bottom:8px">Run</h4>
+                                                <div class="code-block" style="font-size:11px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Start dashboard
+cd ~/dashboard-roblox
+bash tools/run_termux.sh
+
+# Start remote monitor
+cd ~/dashboard-roblox/tools
+python remote_monitor.py --url https://dashboard.aavpanel.my.id
+
+# Update project
+cd ~/dashboard-roblox
+git pull</pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
                         </div>
                     </div>
                     
@@ -886,10 +1029,91 @@
                             <p style="margin-top:8px;font-size:12px;color:var(--text-muted)" id="autoexecScanStatusText">Scanning...</p>
                         </div>
                     </div>
+
+                    <!-- Delta Keys Tab -->
+                    <div class="script-content" id="script-delta" style="display:none">
+                        <div class="page-toolbar">
+                            <div class="page-toolbar-actions">
+                                <button class="btn btn-secondary" onclick="loadDeltaKeys();loadDeltaLogs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                            </div>
+                        </div>
+
+                        <!-- Summary Cards -->
+                        <div class="stats-grid" style="margin-bottom:16px">
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background:linear-gradient(135deg,#00b4d8,#0284c7)">
+                                    <i class="fas fa-mobile-alt"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="stat-label">Devices</span>
+                                    <span class="stat-value" id="dkDevices" style="color:var(--blue)">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background:linear-gradient(135deg,#22c55e,#16a34a)">
+                                    <i class="fas fa-key"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="stat-label">Keys Active</span>
+                                    <span class="stat-value" id="dkActive" style="color:var(--green)">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626)">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="stat-label">Expired</span>
+                                    <span class="stat-value" id="dkExpired" style="color:var(--red)">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="stat-label">No Key</span>
+                                    <span class="stat-value" id="dkMissing" style="color:var(--yellow)">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Per-Device Key Grid -->
+                        <div id="deltaKeysGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;margin-bottom:20px">
+                            <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading...</div>
+                        </div>
+
+                        <!-- Bypass Logs -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-history"></i> Bypass Logs</h3>
+                                <button class="btn btn-sm btn-secondary" onclick="loadDeltaLogs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                            </div>
+                            <div class="card-body" style="max-height:400px;overflow-y:auto">
+                                <div id="deltaLogsContainer">
+                                    <div class="empty-state"><i class="fas fa-history"></i> No logs yet</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Logs Page -->
+                <!-- Logs Page (Activity + Account Logs) -->
                 <div class="page" id="page-logs">
+                    <!-- Activity Section -->
+                    <div class="card" style="margin-bottom:16px">
+                        <div class="card-header">
+                            <h3><i class="fas fa-history"></i> Activity Log</h3>
+                            <button class="btn btn-sm btn-danger" onclick="clearActivity()"><i class="fas fa-trash"></i> Clear</button>
+                        </div>
+                        <div class="card-body" style="max-height:250px;overflow-y:auto">
+                            <div class="activity-timeline" id="activityLog">
+                                <div class="empty-state"><i class="fas fa-history"></i> Belum ada aktivitas</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Account Logs Section -->
                     <div class="card">
                         <div class="card-header">
                             <h3><i class="fas fa-clipboard-list"></i> Account Logs</h3>
@@ -1235,233 +1459,6 @@
                             </div>
                         </div>
                     </div>
-
-                </div>
-
-                <!-- Termux Guide Page -->
-                <div class="page" id="page-termux">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3><i class="fas fa-mobile-alt"></i> Setup Termux (Redfinger)</h3>
-                        </div>
-                        <div class="card-body">
-                            <!-- Step 1 -->
-                            <div class="instruction-step" style="margin-bottom:20px">
-                                <span class="step-num">1</span>
-                                <div>
-                                    <strong>Install Termux</strong>
-                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Download dari F-Droid (bukan Play Store)</p>
-                                    <a href="https://f-droid.org/en/packages/com.termux/" target="_blank" class="btn btn-sm btn-secondary" style="margin-top:4px">
-                                        <i class="fas fa-download"></i> Download Termux
-                                    </a>
-                                </div>
-                            </div>
-
-                            <!-- Step 2 -->
-                            <div class="instruction-step" style="margin-bottom:20px">
-                                <span class="step-num">2</span>
-                                <div>
-                                    <strong>Buka Termux & Jalankan Setup</strong>
-                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Copy-paste command ini di Termux:</p>
-                                    <div class="code-block" style="position:relative;margin-top:8px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">pkg update -y && pkg install python adb git curl cloudflared -y && pip install flask flask-cors werkzeug && git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox && bash ~/dashboard-roblox/tools/setup_termux.sh</pre>
-                                        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
-                                            <i class="fas fa-copy"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Step 3 -->
-                            <div class="instruction-step" style="margin-bottom:20px">
-                                <span class="step-num">3</span>
-                                <div>
-                                    <strong>Start Dashboard</strong>
-                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Jalankan dashboard di Termux:</p>
-                                    <div class="code-block" style="position:relative;margin-top:8px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox && bash tools/run_termux.sh</pre>
-                                        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
-                                            <i class="fas fa-copy"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Step 4 -->
-                            <div class="instruction-step" style="margin-bottom:20px">
-                                <span class="step-num">4</span>
-                                <div>
-                                    <strong>Start Remote Monitor (Optional)</strong>
-                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Auto-rejoin & monitor untuk Cloudphone accounts:</p>
-                                    <div class="code-block" style="position:relative;margin-top:8px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox/tools && python remote_monitor.py --url https://dashboard.aavpanel.my.id</pre>
-                                        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
-                                            <i class="fas fa-copy"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Step 5 -->
-                            <div class="instruction-step" style="margin-bottom:20px">
-                                <span class="step-num">5</span>
-                                <div>
-                                    <strong>Akses dari PC</strong>
-                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Buka browser di PC:</p>
-                                    <div class="code-block" style="position:relative;margin-top:8px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">https://dashboard.aavpanel.my.id</pre>
-                                        <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
-                                            <i class="fas fa-copy"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Remote Monitor Info -->
-                    <div class="card" style="margin-top:16px">
-                        <div class="card-header">
-                            <h3><i class="fas fa-info-circle"></i> Remote Monitor Info</h3>
-                        </div>
-                        <div class="card-body">
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                                <div>
-                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:8px"><i class="fas fa-cog"></i> Yang Dilakukan</h4>
-                                    <ul style="font-size:12px;color:var(--text-secondary);list-style:none;padding:0">
-                                        <li style="margin-bottom:4px">✓ Auto-discover Roblox packages</li>
-                                        <li style="margin-bottom:4px">✓ Auto-create accounts di dashboard</li>
-                                        <li style="margin-bottom:4px">✓ Auto-extract cookies</li>
-                                        <li style="margin-bottom:4px">✓ Auto-push scripts ke apps</li>
-                                        <li style="margin-bottom:4px">✓ Auto-rejoin saat kicked/disconnect</li>
-                                        <li style="margin-bottom:4px">✓ Monitor status ke dashboard</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:8px"><i class="fas fa-exclamation-triangle"></i> Persyaratan</h4>
-                                    <ul style="font-size:12px;color:var(--text-secondary);list-style:none;padding:0">
-                                        <li style="margin-bottom:4px">✓ Root access di device</li>
-                                        <li style="margin-bottom:4px">✓ Internet connection</li>
-                                        <li style="margin-bottom:4px">✓ Roblox apps terinstall</li>
-                                        <li style="margin-bottom:4px">✓ Delta Executor terinstall</li>
-                                        <li style="margin-bottom:4px">✓ Dashboard PC running</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Commands Reference -->
-                    <div class="card" style="margin-top:16px">
-                        <div class="card-header">
-                            <h3><i class="fas fa-code"></i> Commands Reference</h3>
-                        </div>
-                        <div class="card-body">
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                                <div>
-                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:8px">Setup</h4>
-                                    <div class="code-block" style="font-size:11px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Install dependencies
-pkg update -y
-pkg install python adb git curl cloudflared
-
-# Install Python packages
-pip install flask flask-cors werkzeug
-
-# Clone project
-git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox
-
-# Setup
-bash ~/dashboard-roblox/tools/setup_termux.sh</pre>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 style="font-size:13px;font-weight:600;margin-bottom:8px">Run</h4>
-                                    <div class="code-block" style="font-size:11px">
-                                        <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Start dashboard
-cd ~/dashboard-roblox
-bash tools/run_termux.sh
-
-# Start remote monitor
-cd ~/dashboard-roblox/tools
-python remote_monitor.py --url https://dashboard.aavpanel.my.id
-
-# Update project
-cd ~/dashboard-roblox
-git pull</pre>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Delta Keys Page -->
-                <div class="page" id="page-delta-keys">
-                    <div class="page-toolbar">
-                        <div class="page-toolbar-actions">
-                            <button class="btn btn-secondary" onclick="loadDeltaKeys()"><i class="fas fa-sync-alt"></i> Refresh</button>
-                        </div>
-                    </div>
-
-                    <!-- Summary Cards -->
-                    <div class="stats-grid" style="margin-bottom:16px">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background:linear-gradient(135deg,#00b4d8,#0284c7)">
-                                <i class="fas fa-mobile-alt"></i>
-                            </div>
-                            <div class="stat-info">
-                                <span class="stat-label">Devices</span>
-                                <span class="stat-value" id="dkDevices" style="color:var(--blue)">0</span>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background:linear-gradient(135deg,#22c55e,#16a34a)">
-                                <i class="fas fa-key"></i>
-                            </div>
-                            <div class="stat-info">
-                                <span class="stat-label">Keys Active</span>
-                                <span class="stat-value" id="dkActive" style="color:var(--green)">0</span>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626)">
-                                <i class="fas fa-clock"></i>
-                            </div>
-                            <div class="stat-info">
-                                <span class="stat-label">Expired</span>
-                                <span class="stat-value" id="dkExpired" style="color:var(--red)">0</span>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
-                                <i class="fas fa-exclamation-triangle"></i>
-                            </div>
-                            <div class="stat-info">
-                                <span class="stat-label">No Key</span>
-                                <span class="stat-value" id="dkMissing" style="color:var(--yellow)">0</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Per-Device Key Grid -->
-                    <div id="deltaKeysGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;margin-bottom:20px">
-                        <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading...</div>
-                    </div>
-
-                    <!-- Bypass Logs -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3><i class="fas fa-history"></i> Bypass Logs</h3>
-                            <button class="btn btn-sm btn-secondary" onclick="loadDeltaLogs()"><i class="fas fa-sync-alt"></i> Refresh</button>
-                        </div>
-                        <div class="card-body" style="max-height:400px;overflow-y:auto">
-                            <div id="deltaLogsContainer">
-                                <div class="empty-state"><i class="fas fa-history"></i> No logs yet</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 </div><!-- /content-inner -->
             </div>

@@ -1,0 +1,35 @@
+                <!-- Inventory Page -->
+                <div class="page" id="page-inventory">
+                    <div class="inventory-accounts-section">
+                        <div class="inventory-section-header">
+                            <div class="inventory-section-icon"><i class="fas fa-users"></i></div>
+                            <div>
+                                <h3>Accounts</h3>
+                                <p class="inventory-section-sub">Loading...</p>
+                            </div>
+                        </div>
+                        <div class="inventory-accounts-list" id="inventoryAccountsList">
+                            <!-- Account cards will be rendered here -->
+                        </div>
+                    </div>
+
+                    <div class="inventory-items-section">
+                        <div class="inventory-items-header">
+                            <div class="inventory-section-icon"><i class="fas fa-box-open"></i></div>
+                            <div>
+                                <h3>Items</h3>
+                                <p class="inventory-section-sub" id="inventoryItemsSummary">Loading...</p>
+                            </div>
+                            <div class="inventory-search">
+                                <input type="text" class="input" id="inventorySearch" placeholder="Filter items..." oninput="filterInventoryItems()">
+                                <button class="btn btn-sm btn-secondary" onclick="refreshInventory()"><i class="fas fa-sync-alt"></i></button>
+                            </div>
+                        </div>
+                        <div class="inventory-category-tabs" id="inventoryCategoryTabs">
+                            <!-- Category tabs will be rendered here -->
+                        </div>
+                        <div class="inventory-items-grid" id="inventoryItemsGrid">
+                            <!-- Item cards will be rendered here -->
+                        </div>
+                    </div>
+                </div>

@@ -1,0 +1,392 @@
+                <!-- Settings Page -->
+                <div class="page" id="page-settings">
+                    <div class="settings-layout">
+                        <div class="settings-sidebar" id="settingsTabs">
+                            <button class="settings-tab active" data-tab="general" onclick="switchSettingsTab('general')"><i class="fas fa-sliders-h"></i> General</button>
+                            <button class="settings-tab" data-tab="monitoring" onclick="switchSettingsTab('monitoring')"><i class="fas fa-chart-line"></i> Monitoring</button>
+                            <button class="settings-tab" data-tab="vm" onclick="switchSettingsTab('vm')"><i class="fas fa-desktop"></i> VM</button>
+                            <button class="settings-tab" data-tab="integrations" onclick="switchSettingsTab('integrations')"><i class="fas fa-plug"></i> Integrations</button>
+                            <button class="settings-tab" data-tab="security" onclick="switchSettingsTab('security')"><i class="fas fa-shield"></i> Security</button>
+                            <button class="settings-tab" data-tab="help" onclick="switchSettingsTab('help')"><i class="fas fa-question-circle"></i> Help</button>
+                        </div>
+                        <div class="settings-content">
+                            <div class="settings-group active" id="settings-general">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-sliders-h"></i> General</h3>
+                                        <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Simpan</button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="settings-grid">
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Auto-Join Otomatis</label>
+                                                    <span class="setting-desc">Join otomatis saat kena kick atau leave</span>
+                                                </div>
+                                                <label class="toggle">
+                                                    <input type="checkbox" id="autoJoinEnabled" checked>
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Delay Rejoin (detik)</label>
+                                                    <span class="setting-desc">Jeda sebelum join ulang</span>
+                                                </div>
+                                                <input type="number" class="input" id="rejoinDelay" value="3" min="1" max="60">
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Max Retries</label>
+                                                    <span class="setting-desc">Maksimal percobaan join ulang</span>
+                                                </div>
+                                                <input type="number" class="input" id="maxRetries" value="5" min="1" max="20">
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Restore from Backup</label>
+                                                    <span class="setting-desc">Kembalikan akun & server dari data.json.bak</span>
+                                                </div>
+                                                <button class="btn btn-sm btn-secondary" onclick="restoreFromBackup()" id="btnRestore"><i class="fas fa-undo-alt"></i> Restore</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-group" id="settings-monitoring">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-chart-line"></i> Monitoring</h3>
+                                        <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Simpan</button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="settings-grid">
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Monitor Interval (detik)</label>
+                                                    <span class="setting-desc">Interval pengecekan status</span>
+                                                </div>
+                                                <input type="number" class="input" id="monitorInterval" value="2" min="1" max="30">
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Rejoin Periodik (menit)</label>
+                                                    <span class="setting-desc">Auto join ulang setiap N menit (0=nonaktif)</span>
+                                                </div>
+                                                <input type="number" class="input" id="rejoinInterval" value="40" min="0" max="999">
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Thread Threshold</label>
+                                                    <span class="setting-desc">Batas thread count untuk deteksi in-game (default 80)</span>
+                                                </div>
+                                                <input type="number" class="input" id="threadThreshold" value="80" min="20" max="500">
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Auto-Verify Interval (jam)</label>
+                                                    <span class="setting-desc">Verifikasi otomatis semua cookie tiap N jam (0=nonaktif)</span>
+                                                </div>
+                                                <input type="number" class="input" id="autoVerifyInterval" value="0" min="0" max="168">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-group" id="settings-vm">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-desktop"></i> VM & Instances</h3>
+                                        <div style="display:flex;gap:8px">
+                                            <button class="btn btn-secondary" id="btnScanADB" onclick="scanADBSerials()"><i class="fas fa-search"></i> Scan ADB</button>
+                                            <button class="btn btn-secondary" id="btnTestADB" onclick="testADB()"><i class="fas fa-plug"></i> Test</button>
+                                            <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Simpan</button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="adbStatus" style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:var(--bg-input);border:1px solid var(--border-color);font-size:13px;color:var(--text-muted)">
+                                            <i class="fas fa-search"></i> Mendeteksi ADB...
+                                        </div>
+                                        <div id="adbTestResults" style="margin-bottom:12px;display:none"></div>
+                                        <div class="settings-grid">
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>ADB Path</label>
+                                                    <span class="setting-desc">Lokasi adb.exe (otomatis terdeteksi)</span>
+                                                </div>
+                                                <input type="text" class="input" id="adbPath" placeholder="Auto-detect" style="max-width:300px;font-size:12px">
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Auto-Restart VM Crash</label>
+                                                    <span class="setting-desc">Restart otomatis VM yang crash/tiba-tiba mati</span>
+                                                </div>
+                                                <label class="toggle">
+                                                    <input type="checkbox" id="autoRestartVM" checked>
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div style="margin-top:16px">
+                                            <label style="font-size:13px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:8px">Serial (IP:Port) per MuMu Instance:</label>
+                                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px" id="mumuSerialLabels">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-group" id="settings-integrations">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-plug"></i> Integrations</h3>
+                                        <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Simpan</button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="settings-grid">
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Discord Webhook URL</label>
+                                                    <span class="setting-desc">Notifikasi otomatis (kick, error, offline)</span>
+                                                </div>
+                                                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                                                    <input type="url" class="input" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." style="width:280px;font-size:12px">
+                                                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
+                                                        <input type="checkbox" id="webhookEnabled"> ON
+                                                    </label>
+                                                    <button class="btn btn-sm btn-secondary" onclick="testWebhook()"><i class="fas fa-paper-plane"></i> Test</button>
+                                                </div>
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Auto Delta Key</label>
+                                                    <span class="setting-desc">Auto-refresh Delta Executor key tiap N jam via ADB</span>
+                                                </div>
+                                                <div style="display:flex;gap:8px;align-items:center">
+                                                    <label class="toggle">
+                                                        <input type="checkbox" id="deltaAutoKey">
+                                                        <span class="toggle-slider"></span>
+                                                    </label>
+                                                    <span style="font-size:11px;color:var(--text-muted)">Auto-refresh tiap ~22 jam</span>
+                                                </div>
+                                            </div>
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Dashboard URL</label>
+                                                    <span class="setting-desc">URL dashboard untuk script Luau (gunakan URL tunnel jika pakai tunnel)</span>
+                                                </div>
+                                                <input type="url" class="input" id="dashboardUrl" placeholder="http://localhost:5000" style="max-width:300px;font-size:12px">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-group" id="settings-security">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-shield"></i> Security</h3>
+                                        <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> Simpan</button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="settings-grid">
+                                            <div class="setting-item">
+                                                <div class="setting-info">
+                                                    <label>Password Dashboard</label>
+                                                    <span class="setting-desc">Proteksi akses dashboard dengan password (kosongkan = nonaktif)</span>
+                                                </div>
+                                                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                                                    <input type="password" class="input" id="dashboardPassword" placeholder="Biarkan kosong jika tidak ingin password" style="width:200px;font-size:12px">
+                                                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
+                                                        <input type="checkbox" id="showPassword"> Show
+                                                    </label>
+                                                    <button class="btn btn-sm btn-danger" id="btnClearPassword" onclick="clearPassword()" style="display:none;font-size:11px"><i class="fas fa-trash"></i> Hapus</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-color)">
+                                            <h4 style="font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="fab fa-discord" style="color:#5865f2"></i> Discord OAuth Login</h4>
+                                            <div class="settings-grid">
+                                                <div class="setting-item">
+                                                    <div class="setting-info">
+                                                        <label>Discord Client ID</label>
+                                                        <span class="setting-desc">Dari Discord Developer Portal</span>
+                                                    </div>
+                                                    <input type="text" class="input" id="discordClientId" placeholder="123456789012345678" style="max-width:280px;font-size:12px">
+                                                </div>
+                                                <div class="setting-item">
+                                                    <div class="setting-info">
+                                                        <label>Discord Client Secret</label>
+                                                        <span class="setting-desc">Rahasia, jangan dishare</span>
+                                                    </div>
+                                                    <input type="password" class="input" id="discordClientSecret" placeholder="client_secret..." style="max-width:320px;font-size:12px">
+                                                </div>
+                                                <div class="setting-item">
+                                                    <div class="setting-info">
+                                                        <label>Guild ID (opsional)</label>
+                                                        <span class="setting-desc">Hanya izinkan member server ini</span>
+                                                    </div>
+                                                    <input type="text" class="input" id="discordGuildId" placeholder="Kosongkan untuk semua user" style="max-width:200px;font-size:12px">
+                                                </div>
+                                            </div>
+                                            <p style="font-size:11px;color:var(--text-muted);margin-top:10px">
+                                                <i class="fas fa-info-circle"></i>
+                                                Redirect URL: <code style="background:var(--bg-input);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);font-size:10px">{{ request.url_root.rstrip('/') }}/api/auth/discord/callback</code>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-group" id="settings-help">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-mobile-alt"></i> Setup Termux (Redfinger)</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">1</span>
+                                            <div>
+                                                <strong>Install Termux</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Download dari F-Droid (bukan Play Store)</p>
+                                                <a href="https://f-droid.org/en/packages/com.termux/" target="_blank" class="btn btn-sm btn-secondary" style="margin-top:4px">
+                                                    <i class="fas fa-download"></i> Download Termux
+                                                </a>
+                                            </div>
+                                        </div>
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">2</span>
+                                            <div>
+                                                <strong>Buka Termux & Jalankan Setup</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Copy-paste command ini di Termux:</p>
+                                                <div class="code-block" style="position:relative;margin-top:8px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">pkg update -y && pkg install python adb git curl cloudflared -y && pip install flask flask-cors werkzeug && git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox && bash ~/dashboard-roblox/tools/setup_termux.sh</pre>
+                                                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">3</span>
+                                            <div>
+                                                <strong>Start Dashboard</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Jalankan dashboard di Termux:</p>
+                                                <div class="code-block" style="position:relative;margin-top:8px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox && bash tools/run_termux.sh</pre>
+                                                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">4</span>
+                                            <div>
+                                                <strong>Start Remote Monitor (Optional)</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Auto-rejoin & monitor untuk Cloudphone accounts:</p>
+                                                <div class="code-block" style="position:relative;margin-top:8px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">cd ~/dashboard-roblox/tools && python remote_monitor.py --url https://dashboard.aavpanel.my.id</pre>
+                                                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="instruction-step" style="margin-bottom:20px">
+                                            <span class="step-num">5</span>
+                                            <div>
+                                                <strong>Akses dari PC</strong>
+                                                <p style="font-size:12px;color:var(--text-muted);margin:4px 0">Buka browser di PC:</p>
+                                                <div class="code-block" style="position:relative;margin-top:8px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;border:1px solid var(--border-color)">https://dashboard.aavpanel.my.id</pre>
+                                                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);showToast('Copied!','success')" style="position:absolute;top:8px;right:8px;font-size:10px">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Remote Monitor Info -->
+                                <div class="card" style="margin-top:16px">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-info-circle"></i> Remote Monitor Info</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                                            <div>
+                                                <h4 style="font-size:13px;font-weight:600;margin-bottom:8px"><i class="fas fa-cog"></i> Yang Dilakukan</h4>
+                                                <ul style="font-size:12px;color:var(--text-secondary);list-style:none;padding:0">
+                                                    <li style="margin-bottom:4px">✓ Auto-discover Roblox packages</li>
+                                                    <li style="margin-bottom:4px">✓ Auto-create accounts di dashboard</li>
+                                                    <li style="margin-bottom:4px">✓ Auto-extract cookies</li>
+                                                    <li style="margin-bottom:4px">✓ Auto-push scripts ke apps</li>
+                                                    <li style="margin-bottom:4px">✓ Auto-rejoin saat kicked/disconnect</li>
+                                                    <li style="margin-bottom:4px">✓ Monitor status ke dashboard</li>
+                                                </ul>
+                                            </div>
+                                            <div>
+                                                <h4 style="font-size:13px;font-weight:600;margin-bottom:8px"><i class="fas fa-exclamation-triangle"></i> Persyaratan</h4>
+                                                <ul style="font-size:12px;color:var(--text-secondary);list-style:none;padding:0">
+                                                    <li style="margin-bottom:4px">✓ Root access di device</li>
+                                                    <li style="margin-bottom:4px">✓ Internet connection</li>
+                                                    <li style="margin-bottom:4px">✓ Roblox apps terinstall</li>
+                                                    <li style="margin-bottom:4px">✓ Delta Executor terinstall</li>
+                                                    <li style="margin-bottom:4px">✓ Dashboard PC running</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Commands Reference -->
+                                <div class="card" style="margin-top:16px">
+                                    <div class="card-header">
+                                        <h3><i class="fas fa-code"></i> Commands Reference</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                                            <div>
+                                                <h4 style="font-size:13px;font-weight:600;margin-bottom:8px">Setup</h4>
+                                                <div class="code-block" style="font-size:11px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Install dependencies
+pkg update -y
+pkg install python adb git curl cloudflared
+
+# Install Python packages
+pip install flask flask-cors werkzeug
+
+# Clone project
+git clone https://github.com/Ahmadsaukanihsb/mumu-dashboard.git ~/dashboard-roblox
+
+# Setup
+bash ~/dashboard-roblox/tools/setup_termux.sh</pre>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h4 style="font-size:13px;font-weight:600;margin-bottom:8px">Run</h4>
+                                                <div class="code-block" style="font-size:11px">
+                                                    <pre style="background:var(--bg-input);padding:12px;border-radius:8px;overflow-x:auto;border:1px solid var(--border-color)"># Start dashboard
+cd ~/dashboard-roblox
+bash tools/run_termux.sh
+
+# Start remote monitor
+cd ~/dashboard-roblox/tools
+python remote_monitor.py --url https://dashboard.aavpanel.my.id
+
+# Update project
+cd ~/dashboard-roblox
+git pull</pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>

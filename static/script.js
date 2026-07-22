@@ -110,16 +110,12 @@ function switchPage(page) {
         dashboard: { title: 'Dashboard', icon: 'chart-pie' },
         accounts: { title: 'Accounts', icon: 'users' },
         servers: { title: 'Servers', icon: 'server' },
-        activity: { title: 'Activity', icon: 'history' },
         settings: { title: 'Settings', icon: 'cog' },
-        vms: { title: 'VMs', icon: 'desktop' },
-        devices: { title: 'Devices', icon: 'mobile-alt' },
+        vms: { title: 'Instances', icon: 'desktop' },
         scripts: { title: 'Scripts', icon: 'code' },
         logs: { title: 'Logs', icon: 'clipboard-list' },
         inventory: { title: 'Inventory', icon: 'box-open' },
         command: { title: 'Command', icon: 'terminal' },
-        termux: { title: 'Termux Guide', icon: 'mobile-alt' },
-        'delta-keys': { title: 'Delta Keys', icon: 'key' }
     };
     const meta = pageMeta[page] || { title: 'Dashboard', icon: 'chart-pie' };
     document.getElementById('pageTitle').textContent = meta.title;
@@ -127,10 +123,8 @@ function switchPage(page) {
 
     if (page === 'dashboard') { refreshAllScreenshots(); }
     if (page === 'scripts') loadScript();
-    if (page === 'vms') { refreshMuMuVMs(); }
-    if (page === 'devices') { startDevicesAutoRefresh(); } else { stopDevicesAutoRefresh(); }
+    if (page === 'vms') { refreshMuMuVMs(); switchInstanceTab('vms'); }
     if (page === 'inventory') { refreshInventory(); }
-    if (page === 'delta-keys') { loadDeltaKeys(); loadDeltaLogs(); }
     if (page === 'command') { initMailbox(); }
     if (page === 'logs') {
         populateLogAccountSelect();
@@ -144,6 +138,7 @@ function switchPage(page) {
     } else {
         if (logRefreshInterval) { clearInterval(logRefreshInterval); logRefreshInterval = null; }
     }
+    if (page === 'settings') { /* settings tabs handled by switchSettingsTab */ }
 }
 
 async function api(method, url, body = null) {
@@ -1879,6 +1874,20 @@ async function restartMuMuVM(vmName) {
     await new Promise(r => setTimeout(r, 3000));
     refreshMuMuVMs();
 }
+function switchInstanceTab(tab) {
+    document.querySelectorAll('.instance-tab').forEach(t => {
+        t.classList.remove('active', 'btn-primary');
+        t.classList.add('btn-secondary');
+    });
+    document.querySelector(`.instance-tab[data-instance="${tab}"]`).classList.add('active', 'btn-primary');
+    document.querySelector(`.instance-tab[data-instance="${tab}"]`).classList.remove('btn-secondary');
+
+    document.querySelectorAll('.instance-content').forEach(c => c.style.display = 'none');
+    document.getElementById(`instance-${tab}`).style.display = 'block';
+
+    if (tab === 'devices') loadDevices();
+}
+
 async function refreshMuMuVMs() {
     const container = document.getElementById('mumuVMList');
     container.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-pulse"></i> Loading VMs...</div>';
@@ -2241,6 +2250,7 @@ function switchScriptTab(tab) {
 
     if (tab === 'myscripts') loadMyScripts();
     if (tab === 'autoexec') { /* autoexec tab: no auto-load, user clicks scan */ }
+    if (tab === 'delta') { loadDeltaKeys(); loadDeltaLogs(); }
 }
 
 async function generateMailboxScript() {

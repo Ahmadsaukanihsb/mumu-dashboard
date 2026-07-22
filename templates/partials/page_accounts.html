@@ -1,0 +1,30 @@
+                <!-- Accounts Page -->
+                <div class="page" id="page-accounts">
+                    <div class="page-toolbar">
+                        <div class="page-toolbar-actions">
+                            <button class="btn btn-danger" id="btnDeleteSelected" style="display:none" onclick="deleteSelectedAccounts()"><i class="fas fa-trash"></i> Hapus (<span id="selectedCount">0</span>)</button>
+                            <button class="btn btn-success" onclick="verifyAllAccounts()" id="btnVerifyAll"><i class="fas fa-check-double"></i> Verify All</button>
+                            <button class="btn btn-primary" onclick="showAddAccount()"><i class="fas fa-plus"></i> Tambah</button>
+                            <button class="btn btn-secondary" onclick="scanVmCookies()" id="btnScanCookies"><i class="fas fa-sync-alt"></i> Scan & Import</button>
+                            <button class="btn btn-secondary" onclick="showDeviceHealth()" title="Cloudphone device health"><i class="fas fa-heartbeat"></i> Device Health</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-fullwidth">
+                            <thead>
+                                <tr>
+                                    <th style="width:30px"><input type="checkbox" id="selectAllAccounts" onchange="toggleSelectAll(this)"></th>
+                                    <th>Nama</th>
+                                    <th>Status</th>
+                                    <th>Instance</th>
+                                    <th>Server</th>
+                                    <th>Last Join</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="accountsTableBody">
+                                <tr><td colspan="7"><div class="empty-state"><i class="fas fa-users"></i> Belum ada account</div></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
