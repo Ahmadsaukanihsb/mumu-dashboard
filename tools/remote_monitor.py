@@ -874,6 +874,8 @@ class RootMonitor:
                     self._execute_reset_command(account_name, cmd)
                 elif cmd_type == 'delta_key':
                     self._execute_delta_key_command(account_name, cmd)
+                elif cmd_type == 'detect_autoexec':
+                    self._execute_detect_autoexec(account_name, cmd)
                 self.complete_command(cmd_id, True, 'Executed')
             except Exception as e:
                 self.complete_command(cmd_id, False, str(e))
@@ -940,6 +942,67 @@ class RootMonitor:
                 'key_preview': '',
                 'message': str(err)
             })
+
+    def _execute_detect_autoexec(self, account_name, cmd):
+        """Detect auto-execute folders on this cloudphone device."""
+        package = cmd.get('package', '')
+        scan_id = cmd.get('scan_id', '')
+        print(f'[{account_name}] Detecting autoexec folders (pkg={package or "all"}, scan={scan_id})...')
+
+        # Build candidate paths
+        candidates = [
+            '/sdcard/Delta/Autoexecute',
+            '/sdcard/Delta/autoexec',
+            '/sdcard/Delta/AutoExecute',
+            '/storage/emulated/0/Delta/Autoexecute',
+            '/storage/emulated/0/Delta/autoexec',
+        ]
+        pkgs = [package] if package else self.packages
+        for pkg in pkgs:
+            candidates += [
+                f'/data/data/{pkg}/files/Delta/Autoexecute',
+                f'/data/data/{pkg}/files/Delta/autoexec',
+                f'/data/data/{pkg}/files/delta/autoexecute',
+                f'/data/data/{pkg}/files/delta/autoexec',
+                f'/sdcard/Android/data/{pkg}/files/Delta/Autoexecute',
+                f'/sdcard/Android/data/{pkg}/files/Delta/autoexec',
+                f'/sdcard/Android/data/{pkg}/files/delta/autoexecute',
+                f'/sdcard/Android/data/{pkg}/files/delta/autoexec',
+                f'/storage/emulated/0/Android/data/{pkg}/files/Delta/Autoexecute',
+                f'/storage/emulated/0/Android/data/{pkg}/files/Delta/autoexec',
+                f'/storage/emulated/0/Android/data/{pkg}/files/delta/autoexecute',
+                f'/storage/emulated/0/Android/data/{pkg}/files/delta/autoexec',
+            ]
+
+        found = []
+        for path in candidates:
+            code, out = self.su_cmd(f'test -d "{path}" && echo EXISTS || echo MISSING')
+            if code != 0 or 'EXISTS' not in (out or ''):
+                continue
+            _, count_out = self.su_cmd(f'ls -1 "{path}" 2>/dev/null | wc -l')
+            file_count = 0
+            try:
+                file_count = int((count_out or '0').strip())
+            except (ValueError, TypeError):
+                pass
+            _, ls_out = self.su_cmd(f'ls -1 "{path}" 2>/dev/null | head -20')
+            file_names = [f.strip() for f in (ls_out or '').split('\n') if f.strip()][:20]
+            _, w_out = self.su_cmd(f'test -w "{path}" && echo W_OK || echo W_NO')
+            writable = 'W_OK' in (w_out or '')
+            found.append({
+                'path': path,
+                'files': file_count,
+                'file_names': file_names,
+                'writable': writable,
+            })
+
+        print(f'[{account_name}] Found {len(found)} autoexec folders')
+        self.http_post('/api/remote/autoexec/report', {
+            'device_id': self.device_id,
+            'scan_id': scan_id,
+            'package': package,
+            'found': found,
+        })
 
 
 CONFIG_PATH = '/sdcard/Download/dashboard_config.json'

@@ -4,7 +4,7 @@ from config import DATA_FILE, PACKAGE_MAP, IS_TERMUX
 from core.state import (
     accounts, servers, settings, schedules, schedule_history,
     activity_log, acc_logs, inventory_data, harvested_fruits_data,
-    _data_lock
+    custom_scripts, _data_lock
 )
 
 
@@ -70,6 +70,8 @@ def load_data():
         schedules.extend(data.get('schedules', []))
         schedule_history.clear()
         schedule_history.extend(data.get('schedule_history', []))
+        custom_scripts.clear()
+        custom_scripts.extend(data.get('custom_scripts', []))
         print(f'[OK] Loaded {len(accounts)} accounts, {len(servers)} servers, {len(schedules)} schedules')
     else:
         print('[ERROR] Tidak ada data yang bisa di-load!')
@@ -95,6 +97,7 @@ def save_data():
         snap_hf = {k: v for k, v in harvested_fruits_data.items()}
         snap_schedules = list(schedules)
         snap_history = list(schedule_history[-500:])
+        snap_scripts = list(custom_scripts)
         tmp = DATA_FILE + '.tmp'
         try:
             with open(tmp, 'w') as f:
@@ -105,7 +108,8 @@ def save_data():
                     'account_logs': snap_logs,
                     'harvested_fruits_data': snap_hf,
                     'schedules': snap_schedules,
-                    'schedule_history': snap_history
+                    'schedule_history': snap_history,
+                    'custom_scripts': snap_scripts
                 }, f, indent=2)
             os.replace(tmp, DATA_FILE)
         except Exception as e:

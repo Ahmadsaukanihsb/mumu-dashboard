@@ -600,9 +600,8 @@
                                                         <input type="checkbox" id="showPassword"> Show
                                                     </label>
                                                     <button class="btn btn-sm btn-danger" id="btnClearPassword" onclick="clearPassword()" style="display:none;font-size:11px"><i class="fas fa-trash"></i> Hapus</button>
-                                                </div>
-                                            </div>
-                                        </div>
+                        </div>
+                    </div>
                                         <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-color)">
                                             <h4 style="font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="fab fa-discord" style="color:#5865f2"></i> Discord OAuth Login</h4>
                                             <div class="settings-grid">
@@ -693,6 +692,12 @@
                         </button>
                         <button class="btn btn-sm btn-secondary script-tab" data-script="custom" onclick="switchScriptTab('custom')">
                             <i class="fas fa-code"></i> Custom Batch
+                        </button>
+                        <button class="btn btn-sm btn-secondary script-tab" data-script="myscripts" onclick="switchScriptTab('myscripts')">
+                            <i class="fas fa-folder-open"></i> My Scripts
+                        </button>
+                        <button class="btn btn-sm btn-secondary script-tab" data-script="autoexec" onclick="switchScriptTab('autoexec')">
+                            <i class="fas fa-search"></i> Auto-Execute
                         </button>
                     </div>
                     
@@ -809,6 +814,116 @@
                                 </div>
                                 <pre class="code-block code-block-full" id="customBatchScriptOutput" style="max-height:400px;overflow:auto">Masukkan items dan klik "Generate"...</pre>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- My Scripts Tab -->
+                    <div class="script-content" id="script-myscripts" style="display:none">
+                        <!-- Editor Card -->
+                        <div class="card" style="margin-bottom:16px">
+                            <div class="card-header">
+                                <h3><i class="fas fa-edit"></i> <span id="myScriptFormTitle">Script Baru</span></h3>
+                                <div style="display:flex;gap:8px">
+                                    <button class="btn btn-secondary" onclick="resetMyScriptForm()"><i class="fas fa-plus"></i> Baru</button>
+                                    <button class="btn btn-primary" onclick="saveMyScript()"><i class="fas fa-save"></i> Simpan</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <input type="hidden" id="myScriptId">
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
+                                    <div class="form-group">
+                                        <label>Nama Script</label>
+                                        <input type="text" class="input" id="myScriptName" placeholder="auto-farm" maxlength="50" style="font-size:12px">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Nama File (di VM)</label>
+                                        <input type="text" class="input" id="myScriptFilename" placeholder="auto-farm.luau" maxlength="60" style="font-size:12px">
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin-bottom:12px">
+                                    <label style="display:flex;justify-content:space-between;align-items:center">
+                                        <span>Isi Script (Lua/Luau)</span>
+                                        <span>
+                                            <input type="file" id="myScriptUpload" accept=".lua,.luau,.txt" style="display:none" onchange="uploadMyScriptFile(event)">
+                                            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('myScriptUpload').click()"><i class="fas fa-file-upload"></i> Upload .luau</button>
+                                        </span>
+                                    </label>
+                                    <textarea class="input" id="myScriptContent" rows="12" placeholder="-- Tulis atau paste script Lua di sini..." style="font-family:var(--font-mono);font-size:11px;resize:vertical"></textarea>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                                    <select class="input" id="myScriptPushTarget" style="max-width:260px;font-size:12px">
+                                        <option value="active">Semua VM Aktif (Roblox running)</option>
+                                        <option value="all">Semua Akun</option>
+                                    </select>
+                                    <button class="btn btn-primary" onclick="pushMyScriptFromForm()"><i class="fas fa-upload"></i> Simpan &amp; Push</button>
+                                    <span id="myScriptFormStatus" style="font-size:11px;color:var(--text-muted)"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Saved Scripts List -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-folder-open"></i> Script Tersimpan</h3>
+                                <button class="btn btn-sm btn-secondary" onclick="loadMyScripts()"><i class="fas fa-sync-alt"></i></button>
+                            </div>
+                            <div class="card-body" id="myScriptsList">
+                                <div class="empty-state"><i class="fas fa-folder-open"></i> Belum ada script tersimpan</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Auto-Execute Detection Tab -->
+                    <div class="script-content" id="script-autoexec" style="display:none">
+                        <div class="card" style="margin-bottom:16px">
+                            <div class="card-header">
+                                <h3><i class="fas fa-search"></i> Deteksi Folder Auto-Execute</h3>
+                                <button class="btn btn-primary" onclick="scanAutoexec()" id="btnScanAutoexec"><i class="fas fa-radar"></i> Scan Semua</button>
+                            </div>
+                            <div class="card-body">
+                                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+                                    Scan folder auto-execute (Delta/Autoexecute) di semua VM lokal dan cloudphone yang online.
+                                    Menampilkan path, jumlah file, dan status writable.
+                                </p>
+                                <div style="display:flex;gap:12px;margin-bottom:12px">
+                                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+                                        <input type="checkbox" id="scanIncludeVM" checked> VM Lokal
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+                                        <input type="checkbox" id="scanIncludeCP" checked> Cloudphone
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scan Results -->
+                        <div id="autoexecScanResults" style="display:none">
+                            <!-- VM Results -->
+                            <div class="card" style="margin-bottom:16px" id="autoexecVmSection">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-desktop"></i> VM Lokal</h3>
+                                    <span id="autoexecVmCount" style="font-size:11px;color:var(--text-muted)"></span>
+                                </div>
+                                <div class="card-body" id="autoexecVmResults">
+                                    <div class="empty-state"><i class="fas fa-search"></i> Belum ada hasil scan</div>
+                                </div>
+                            </div>
+
+                            <!-- Cloudphone Results -->
+                            <div class="card" id="autoexecCpSection">
+                                <div class="card-header">
+                                    <h3><i class="fas fa-mobile-alt"></i> Cloudphone</h3>
+                                    <span id="autoexecCpCount" style="font-size:11px;color:var(--text-muted)"></span>
+                                </div>
+                                <div class="card-body" id="autoexecCpResults">
+                                    <div class="empty-state"><i class="fas fa-mobile-alt"></i> Belum ada hasil scan</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="autoexecScanStatus" style="display:none;text-align:center;padding:20px">
+                            <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--primary)"></i>
+                            <p style="margin-top:8px;font-size:12px;color:var(--text-muted)" id="autoexecScanStatusText">Scanning...</p>
                         </div>
                     </div>
                 </div>

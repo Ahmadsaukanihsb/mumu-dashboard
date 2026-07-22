@@ -1,6 +1,7 @@
 from core.state import (
     accounts,
     servers,
+    custom_scripts,
     settings,
     schedules,
     schedule_history,

@@ -340,6 +340,108 @@ def auto_push_script_to_vm(acc, serial):
         try: os.remove(tmp)
         except: pass
 
+
+def push_custom_script_to_vm(script_content, filename, acc, serial):
+    """Push a custom script to Delta Autoexecute folder on the VM."""
+    from models import log_account as _log_account
+    name = acc.get('name', 'Account')
+    package = acc.get('package_name', '')
+    import tempfile, os
+    safe_filename = os.path.basename(filename)
+    tmp = os.path.join(tempfile.gettempdir(), f'custom_push_{acc.get("id","")}_{safe_filename}')
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(script_content)
+        if package:
+            script_path = f'/data/data/{package}/files/Delta/Autoexecute/{safe_filename}'
+        else:
+            script_path = f'/sdcard/Delta/Autoexecute/{safe_filename}'
+        code, out = adb_cmd(['push', tmp, script_path], serial)
+        if code == 0:
+            target = package if package else 'sdcard'
+            _log_account(acc.get('id', ''), name, f'Custom script "{safe_filename}" push ke {target} OK')
+            return True, 'OK'
+        return False, out
+    except Exception as e:
+        return False, str(e)
+    finally:
+        try: os.remove(tmp)
+        except: pass
+
+
+def detect_autoexec_folders(serial, package=''):
+    """Detect auto-execute folders on a VM/device via ADB.
+
+    Returns a dict:
+        {
+            'found': [ {path, files, file_names, writable} ],
+            'checked': [paths checked],
+            'error': None | str
+        }
+    """
+    import os
+    safe_pkg = package if package and re.match(r'^[a-zA-Z0-9._]+$', package) else ''
+
+    # Candidate paths (Delta + generic autoexec)
+    candidates = [
+        '/sdcard/Delta/Autoexecute',
+        '/sdcard/Delta/autoexec',
+        '/sdcard/Delta/AutoExecute',
+        '/storage/emulated/0/Delta/Autoexecute',
+        '/storage/emulated/0/Delta/autoexec',
+    ]
+    if safe_pkg:
+        candidates += [
+            f'/data/data/{safe_pkg}/files/Delta/Autoexecute',
+            f'/data/data/{safe_pkg}/files/Delta/autoexec',
+            f'/data/data/{safe_pkg}/files/delta/autoexecute',
+            f'/data/data/{safe_pkg}/files/delta/autoexec',
+            f'/sdcard/Android/data/{safe_pkg}/files/Delta/Autoexecute',
+            f'/sdcard/Android/data/{safe_pkg}/files/Delta/autoexec',
+            f'/sdcard/Android/data/{safe_pkg}/files/delta/autoexecute',
+            f'/sdcard/Android/data/{safe_pkg}/files/delta/autoexec',
+            f'/storage/emulated/0/Android/data/{safe_pkg}/files/Delta/Autoexecute',
+            f'/storage/emulated/0/Android/data/{safe_pkg}/files/Delta/autoexec',
+            f'/storage/emulated/0/Android/data/{safe_pkg}/files/delta/autoexecute',
+            f'/storage/emulated/0/Android/data/{safe_pkg}/files/delta/autoexec',
+        ]
+
+    found = []
+    checked = []
+    error = None
+
+    for path in candidates:
+        checked.append(path)
+        code, out = adb_cmd(['shell', f'test -d "{path}" && echo EXISTS || echo MISSING'], serial)
+        if code != 0:
+            error = out or 'ADB command failed'
+            continue
+        if 'EXISTS' not in (out or ''):
+            continue
+        # Count files
+        _, count_out = adb_cmd(['shell', f'ls -1 "{path}" 2>/dev/null | wc -l'], serial)
+        file_count = 0
+        try:
+            file_count = int((count_out or '0').strip())
+        except (ValueError, TypeError):
+            pass
+        # List file names (limit 20)
+        _, ls_out = adb_cmd(['shell', f'ls -1 "{path}" 2>/dev/null | head -20'], serial)
+        file_names = [f.strip() for f in (ls_out or '').split('\n') if f.strip()][:20]
+        # Check writable
+        _, w_out = adb_cmd(['shell', f'test -w "{path}" && echo W_OK || echo W_NO'], serial)
+        writable = 'W_OK' in (w_out or '')
+
+        found.append({
+            'path': path,
+            'files': file_count,
+            'file_names': file_names,
+            'writable': writable,
+        })
+
+    return {'found': found, 'checked': checked, 'error': error if not found else None}
+
+
 def discover_roblox_packages(serial=None):
     adb = find_adb()
     if not adb: return []

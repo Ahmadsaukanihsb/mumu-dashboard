@@ -25,6 +25,8 @@ from blueprints.seed_shop import seed_shop_bp
 from blueprints.remote import remote_bp
 from blueprints.join import join_bp
 from blueprints.inject import inject_bp
+from blueprints.scripts import scripts_bp
+from blueprints.autoexec import autoexec_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(accounts_bp)
@@ -40,6 +42,8 @@ app.register_blueprint(seed_shop_bp)
 app.register_blueprint(remote_bp)
 app.register_blueprint(join_bp)
 app.register_blueprint(inject_bp)
+app.register_blueprint(scripts_bp)
+app.register_blueprint(autoexec_bp)
 
 @app.after_request
 def no_cache(response):

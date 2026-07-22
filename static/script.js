@@ -2238,6 +2238,9 @@ function switchScriptTab(tab) {
     // Update content
     document.querySelectorAll('.script-content').forEach(c => c.style.display = 'none');
     document.getElementById(`script-${tab}`).style.display = 'block';
+
+    if (tab === 'myscripts') loadMyScripts();
+    if (tab === 'autoexec') { /* autoexec tab: no auto-load, user clicks scan */ }
 }
 
 async function generateMailboxScript() {
@@ -2351,6 +2354,322 @@ async function copyCustomBatchScript() {
         document.execCommand('copy');
         window.getSelection().removeAllRanges();
     }
+}
+
+// ==================== MY SCRIPTS (Custom Script Library) ====================
+
+let myScripts = [];
+
+function resetMyScriptForm() {
+    document.getElementById('myScriptId').value = '';
+    document.getElementById('myScriptName').value = '';
+    document.getElementById('myScriptFilename').value = '';
+    document.getElementById('myScriptContent').value = '';
+    document.getElementById('myScriptFormTitle').textContent = 'Script Baru';
+    document.getElementById('myScriptFormStatus').textContent = '';
+}
+
+function uploadMyScriptFile(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    if (file.size > 100 * 1024) {
+        showToast('File terlalu besar (maks 100 KB)', 'error');
+        ev.target.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+        document.getElementById('myScriptContent').value = reader.result || '';
+        if (!document.getElementById('myScriptFilename').value) {
+            document.getElementById('myScriptFilename').value = file.name;
+        }
+        if (!document.getElementById('myScriptName').value) {
+            document.getElementById('myScriptName').value = file.name.replace(/\.(luau|lua|txt)$/i, '');
+        }
+        showToast(`File "${file.name}" dimuat`, 'success');
+    };
+    reader.readAsText(file);
+    ev.target.value = '';
+}
+
+async function loadMyScripts() {
+    const res = await api('GET', '/api/scripts');
+    if (!res || !res.scripts) return;
+    myScripts = res.scripts;
+    renderMyScripts();
+    // refresh push target dropdown dengan daftar akun
+    const sel = document.getElementById('myScriptPushTarget');
+    if (sel) {
+        const current = sel.value;
+        sel.innerHTML = '<option value="active">Semua VM Aktif (Roblox running)</option>' +
+            '<option value="all">Semua Akun</option>' +
+            (accounts || []).map(a => `<option value="${a.id}">Akun: ${esc(a.name)}</option>`).join('');
+        if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    }
+}
+
+function renderMyScripts() {
+    const container = document.getElementById('myScriptsList');
+    if (!container) return;
+    if (!myScripts.length) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i> Belum ada script tersimpan</div>';
+        return;
+    }
+    container.innerHTML = myScripts.map(s => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border-color)">
+            <div style="width:34px;height:34px;border-radius:8px;background:rgba(99,102,241,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fas fa-file-code" style="color:var(--primary)"></i>
+            </div>
+            <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:13px">${esc(s.name)}</div>
+                <div style="font-size:10px;color:var(--text-muted)">${esc(s.filename)} &middot; ${(s.size/1024).toFixed(1)} KB &middot; ${esc(s.updated_at || '')}</div>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="pushMyScript('${s.id}')" title="Push ke target"><i class="fas fa-upload"></i></button>
+            <button class="btn btn-sm btn-secondary" onclick="editMyScript('${s.id}')" title="Edit"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-sm btn-danger" onclick="deleteMyScript('${s.id}', '${esc(s.name)}')" title="Hapus"><i class="fas fa-trash"></i></button>
+        </div>`).join('');
+}
+
+async function saveMyScript() {
+    const id = document.getElementById('myScriptId').value;
+    const name = document.getElementById('myScriptName').value.trim();
+    const filename = document.getElementById('myScriptFilename').value.trim();
+    const content = document.getElementById('myScriptContent').value;
+    if (!name) { showToast('Masukkan nama script', 'warning'); return null; }
+    if (!content.trim()) { showToast('Isi script tidak boleh kosong', 'warning'); return null; }
+
+    const payload = { name, filename, content };
+    const res = id
+        ? await api('PUT', `/api/scripts/${id}`, payload)
+        : await api('POST', '/api/scripts', payload);
+
+    if (res && res.success) {
+        showToast(`Script "${name}" tersimpan`, 'success');
+        document.getElementById('myScriptId').value = res.script.id;
+        document.getElementById('myScriptFormTitle').textContent = `Edit: ${res.script.name}`;
+        await loadMyScripts();
+        return res.script;
+    } else {
+        showToast('Gagal: ' + (res?.error || 'unknown'), 'error');
+        return null;
+    }
+}
+
+async function editMyScript(id) {
+    const res = await api('GET', `/api/scripts/${id}`);
+    if (!res || !res.id) { showToast('Gagal memuat script', 'error'); return; }
+    document.getElementById('myScriptId').value = res.id;
+    document.getElementById('myScriptName').value = res.name;
+    document.getElementById('myScriptFilename').value = res.filename;
+    document.getElementById('myScriptContent').value = res.content || '';
+    document.getElementById('myScriptFormTitle').textContent = `Edit: ${res.name}`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteMyScript(id, name) {
+    if (!confirm(`Hapus script "${name}"?`)) return;
+    const res = await api('DELETE', `/api/scripts/${id}`);
+    if (res && res.success) {
+        showToast('Script dihapus', 'success');
+        if (document.getElementById('myScriptId').value === id) resetMyScriptForm();
+        await loadMyScripts();
+    } else {
+        showToast('Gagal hapus: ' + (res?.error || 'unknown'), 'error');
+    }
+}
+
+function showPushResults(res, title) {
+    let html = `<div style="max-height:400px;overflow-y:auto">
+        <p style="margin-bottom:10px;font-size:13px"><strong>${esc(title)}</strong><br>Berhasil: ${res.pushed} / ${res.total}</p>`;
+    for (const r of (res.results || [])) {
+        const icon = r.status === 'ok' ? '<i class="fas fa-check-circle" style="color:var(--green)"></i>'
+            : r.status === 'skipped' ? '<i class="fas fa-minus-circle" style="color:var(--text-muted)"></i>'
+            : '<i class="fas fa-times-circle" style="color:var(--red)"></i>';
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-color);font-size:12px">
+            ${icon}<span style="flex:1">${esc(r.account || ('VM #' + r.instance))} — ${esc(r.message || '')}</span></div>`;
+    }
+    html += `</div><div style="margin-top:12px;text-align:center"><button class="btn btn-primary" onclick="closeDynamicModal()"><i class="fas fa-check"></i> OK</button></div>`;
+    showModal(html);
+}
+
+async function pushMyScript(id) {
+    const meta = myScripts.find(s => s.id === id);
+    if (!meta) return;
+    const target = document.getElementById('myScriptPushTarget').value;
+    const targetLabel = target === 'active' ? 'semua VM aktif' : target === 'all' ? 'SEMUA akun' : 'akun terpilih';
+    if (!confirm(`Push script "${meta.name}" ke ${targetLabel}?`)) return;
+    const res = await api('POST', `/api/scripts/${id}/push`, { target });
+    if (res && res.success) {
+        showPushResults(res, `Push "${meta.name}"`);
+    } else {
+        showToast('Gagal push: ' + (res?.error || 'unknown'), 'error');
+    }
+}
+
+async function pushMyScriptFromForm() {
+    const saved = await saveMyScript();
+    if (!saved) return;
+    await pushMyScript(saved.id);
+}
+
+// ==================== AUTO-EXECUTE DETECTION ====================
+
+let _autoexecScanId = null;
+let _autoexecPollTimer = null;
+
+async function scanAutoexec() {
+    const btn = document.getElementById('btnScanAutoexec');
+    const includeVM = document.getElementById('scanIncludeVM').checked;
+    const includeCP = document.getElementById('scanIncludeCP').checked;
+
+    if (!includeVM && !includeCP) {
+        showToast('Pilih minimal satu: VM Lokal atau Cloudphone', 'warning');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+
+    // Show status, hide previous results
+    document.getElementById('autoexecScanStatus').style.display = 'block';
+    document.getElementById('autoexecScanResults').style.display = 'none';
+    document.getElementById('autoexecScanStatusText').textContent = 'Memulai scan...';
+
+    // Stop previous polling
+    if (_autoexecPollTimer) { clearInterval(_autoexecPollTimer); _autoexecPollTimer = null; }
+
+    const res = await api('POST', '/api/autoexec/scan', {
+        include_vm: includeVM,
+        include_cloudphone: includeCP,
+    });
+
+    if (!res || !res.success) {
+        showToast('Gagal memulai scan: ' + (res?.error || 'unknown'), 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-radar"></i> Scan Semua';
+        document.getElementById('autoexecScanStatus').style.display = 'none';
+        return;
+    }
+
+    _autoexecScanId = res.scan_id;
+    const pendingCP = res.cloudphone_queued || 0;
+
+    if (pendingCP > 0) {
+        document.getElementById('autoexecScanStatusText').textContent =
+            `VM selesai. Menunggu ${pendingCP} cloudphone merespons...`;
+        // Poll untuk hasil cloudphone
+        _autoexecPollTimer = setInterval(() => pollAutoexecResult(), 3000);
+    }
+
+    // Fetch hasil langsung (VM sudah selesai)
+    await fetchAutoexecResult();
+
+    if (pendingCP === 0) {
+        finishAutoexecScan();
+    }
+}
+
+async function pollAutoexecResult() {
+    if (!_autoexecScanId) { clearInterval(_autoexecPollTimer); return; }
+    await fetchAutoexecResult();
+    const res = await api('GET', `/api/autoexec/scan/${_autoexecScanId}`);
+    if (!res || res.status === 'done' || res.pending === 0) {
+        finishAutoexecScan();
+    }
+}
+
+async function fetchAutoexecResult() {
+    if (!_autoexecScanId) return;
+    const res = await api('GET', `/api/autoexec/scan/${_autoexecScanId}`);
+    if (!res) return;
+    renderAutoexecResults(res);
+}
+
+function finishAutoexecScan() {
+    if (_autoexecPollTimer) { clearInterval(_autoexecPollTimer); _autoexecPollTimer = null; }
+    const btn = document.getElementById('btnScanAutoexec');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-radar"></i> Scan Semua';
+    document.getElementById('autoexecScanStatus').style.display = 'none';
+    document.getElementById('autoexecScanResults').style.display = 'block';
+}
+
+function renderAutoexecResults(data) {
+    // VM Results
+    const vmContainer = document.getElementById('autoexecVmResults');
+    const vmCount = document.getElementById('autoexecVmCount');
+    const vms = data.vm || [];
+    vmCount.textContent = `${vms.length} VM di-scan`;
+
+    if (!vms.length) {
+        vmContainer.innerHTML = '<div class="empty-state"><i class="fas fa-desktop"></i> Tidak ada VM yang di-scan</div>';
+    } else {
+        vmContainer.innerHTML = vms.map(v => renderAutoexecEntry(v, 'vm')).join('');
+    }
+
+    // Cloudphone Results
+    const cpContainer = document.getElementById('autoexecCpResults');
+    const cpCount = document.getElementById('autoexecCpCount');
+    const cps = data.cloudphone || [];
+    cpCount.textContent = `${cps.length} cloudphone`;
+
+    if (!cps.length) {
+        cpContainer.innerHTML = '<div class="empty-state"><i class="fas fa-mobile-alt"></i> Tidak ada cloudphone</div>';
+    } else {
+        cpContainer.innerHTML = cps.map(c => renderAutoexecEntry(c, 'cloudphone')).join('');
+    }
+
+    // Summary toast
+    const total = data.total_folders || 0;
+    if (data.status === 'done') {
+        showToast(`Scan selesai: ${total} folder auto-execute ditemukan`, total > 0 ? 'success' : 'info');
+    }
+}
+
+function renderAutoexecEntry(entry, type) {
+    const statusIcon = entry.status === 'ok' ? '<i class="fas fa-check-circle" style="color:var(--green)"></i>'
+        : entry.status === 'offline' ? '<i class="fas fa-plug" style="color:var(--red)"></i>'
+        : entry.status === 'queued' ? '<i class="fas fa-clock" style="color:var(--yellow)"></i>'
+        : '<i class="fas fa-times-circle" style="color:var(--red)"></i>';
+
+    const statusLabel = entry.status === 'ok' ? 'OK'
+        : entry.status === 'offline' ? 'Offline'
+        : entry.status === 'queued' ? 'Menunggu...'
+        : entry.message || 'Error';
+
+    const found = entry.found || [];
+    const typeIcon = type === 'vm' ? 'fa-desktop' : 'fa-mobile-alt';
+    const typeLabel = type === 'vm' ? `VM #${entry.instance ?? '?'}` : (entry.device_id || 'Cloudphone');
+
+    let foldersHtml = '';
+    if (found.length) {
+        foldersHtml = found.map(f => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg-input);border-radius:5px;margin-top:4px;font-size:11px">
+                <i class="fas fa-folder${f.writable ? '-open' : ''}" style="color:${f.writable ? 'var(--green)' : 'var(--yellow)'};flex-shrink:0"></i>
+                <div style="flex:1;min-width:0">
+                    <div style="font-family:var(--font-mono);word-break:break-all">${esc(f.path)}</div>
+                    <div style="color:var(--text-muted);font-size:10px">
+                        ${f.files} file${f.files !== 1 ? 's' : ''} &middot; ${f.writable ? '<span style="color:var(--green)">writable</span>' : '<span style="color:var(--yellow)">read-only</span>'}
+                    </div>
+                    ${f.file_names && f.file_names.length ? `<div style="color:var(--text-muted);font-size:10px;margin-top:2px">${f.file_names.slice(0, 5).map(fn => `<code style="background:rgba(255,255,255,0.06);padding:1px 4px;border-radius:3px;margin-right:4px">${esc(fn)}</code>`).join('')}${f.file_names.length > 5 ? ` <span style="color:var(--text-muted)">+${f.file_names.length - 5} more</span>` : ''}</div>` : ''}
+                </div>
+            </div>`).join('');
+    } else if (entry.status === 'ok') {
+        foldersHtml = '<div style="padding:8px;font-size:11px;color:var(--text-muted)"><i class="fas fa-info-circle"></i> Tidak ada folder auto-execute ditemukan</div>';
+    }
+
+    return `
+        <div style="padding:10px;border-bottom:1px solid var(--border-color)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <i class="fas ${typeIcon}" style="color:var(--primary);width:16px"></i>
+                <span style="font-weight:600;font-size:12px;flex:1">${esc(entry.label || entry.serial || '?')}</span>
+                <span style="font-size:10px;color:var(--text-muted)">${esc(typeLabel)}</span>
+                ${statusIcon}
+                <span style="font-size:10px;color:${entry.status === 'ok' ? 'var(--green)' : entry.status === 'queued' ? 'var(--yellow)' : 'var(--red)'}">${esc(statusLabel)}</span>
+            </div>
+            ${entry.package ? `<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px"><i class="fas fa-box"></i> ${esc(entry.package)}</div>` : ''}
+            ${foldersHtml}
+        </div>`;
 }
 
 function renderVmAccountMap() {

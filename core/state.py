@@ -2,6 +2,7 @@ import threading
 
 accounts = []
 servers = []
+custom_scripts = []
 settings = {
     'auto_join_enabled': True,
     'rejoin_delay': 3,
