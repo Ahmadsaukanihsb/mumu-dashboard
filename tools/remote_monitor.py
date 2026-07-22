@@ -876,6 +876,8 @@ class RootMonitor:
                     self._execute_delta_key_command(account_name, cmd)
                 elif cmd_type == 'detect_autoexec':
                     self._execute_detect_autoexec(account_name, cmd)
+                elif cmd_type == 'delete_autoexec_file':
+                    self._execute_delete_autoexec_file(account_name, cmd)
                 self.complete_command(cmd_id, True, 'Executed')
             except Exception as e:
                 self.complete_command(cmd_id, False, str(e))
@@ -1003,6 +1005,22 @@ class RootMonitor:
             'package': package,
             'found': found,
         })
+
+    def _execute_delete_autoexec_file(self, account_name, cmd):
+        """Delete a file from an auto-execute folder."""
+        file_path = cmd.get('file_path', '')
+        if not file_path:
+            print(f'[{account_name}] Delete autoexec: no file_path')
+            return
+        # Safety: only allow deleting from autoexec paths
+        if 'autoexec' not in file_path.lower():
+            print(f'[{account_name}] Delete autoexec: rejected non-autoexec path: {file_path}')
+            return
+        code, out = self.su_cmd(f'rm -f "{file_path}"')
+        if code == 0:
+            print(f'[{account_name}] Deleted: {file_path}')
+        else:
+            print(f'[{account_name}] Delete failed: {file_path} -> {out}')
 
 
 CONFIG_PATH = '/sdcard/Download/dashboard_config.json'

@@ -2641,19 +2641,33 @@ function renderAutoexecEntry(entry, type) {
     const typeIcon = type === 'vm' ? 'fa-desktop' : 'fa-mobile-alt';
     const typeLabel = type === 'vm' ? `VM #${entry.instance ?? '?'}` : (entry.device_id || 'Cloudphone');
 
+    // Encode data untuk onclick
+    const serial = entry.serial || '';
+    const deviceId = entry.device_id || '';
+    const pkg = entry.package || '';
+
     let foldersHtml = '';
     if (found.length) {
-        foldersHtml = found.map(f => `
-            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg-input);border-radius:5px;margin-top:4px;font-size:11px">
-                <i class="fas fa-folder${f.writable ? '-open' : ''}" style="color:${f.writable ? 'var(--green)' : 'var(--yellow)'};flex-shrink:0"></i>
+        foldersHtml = found.map(f => {
+            const filesList = (f.file_names || []).map(fn => {
+                const safeFn = fn.replace(/'/g, "\\'");
+                return `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:3px;margin:2px 2px 0 0">
+                    <code style="font-size:10px">${esc(fn)}</code>
+                    <button onclick="deleteAutoexecFile(event,'${type}','${esc(f.path)}','${safeFn}','${serial}','${deviceId}','${pkg}')" title="Hapus ${esc(fn)}" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;font-size:10px;line-height:1"><i class="fas fa-times"></i></button>
+                </span>`;
+            }).join('');
+            return `
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 8px;background:var(--bg-input);border-radius:5px;margin-top:4px;font-size:11px">
+                <i class="fas fa-folder${f.writable ? '-open' : ''}" style="color:${f.writable ? 'var(--green)' : 'var(--yellow)'};flex-shrink:0;margin-top:2px"></i>
                 <div style="flex:1;min-width:0">
                     <div style="font-family:var(--font-mono);word-break:break-all">${esc(f.path)}</div>
-                    <div style="color:var(--text-muted);font-size:10px">
+                    <div style="color:var(--text-muted);font-size:10px;margin-top:2px">
                         ${f.files} file${f.files !== 1 ? 's' : ''} &middot; ${f.writable ? '<span style="color:var(--green)">writable</span>' : '<span style="color:var(--yellow)">read-only</span>'}
                     </div>
-                    ${f.file_names && f.file_names.length ? `<div style="color:var(--text-muted);font-size:10px;margin-top:2px">${f.file_names.slice(0, 5).map(fn => `<code style="background:rgba(255,255,255,0.06);padding:1px 4px;border-radius:3px;margin-right:4px">${esc(fn)}</code>`).join('')}${f.file_names.length > 5 ? ` <span style="color:var(--text-muted)">+${f.file_names.length - 5} more</span>` : ''}</div>` : ''}
+                    ${f.file_names && f.file_names.length ? `<div style="margin-top:4px">${filesList}${f.file_names.length > 20 ? `<div style="color:var(--text-muted);font-size:10px;margin-top:2px">...dan ${f.files - 20} file lainnya</div>` : ''}</div>` : ''}
                 </div>
-            </div>`).join('');
+            </div>`;
+        }).join('');
     } else if (entry.status === 'ok') {
         foldersHtml = '<div style="padding:8px;font-size:11px;color:var(--text-muted)"><i class="fas fa-info-circle"></i> Tidak ada folder auto-execute ditemukan</div>';
     }
@@ -2670,6 +2684,30 @@ function renderAutoexecEntry(entry, type) {
             ${entry.package ? `<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px"><i class="fas fa-box"></i> ${esc(entry.package)}</div>` : ''}
             ${foldersHtml}
         </div>`;
+}
+
+async function deleteAutoexecFile(ev, type, path, filename, serial, deviceId, pkg) {
+    ev.stopPropagation();
+    if (!confirm(`Hapus file "${filename}" dari ${path}?`)) return;
+    const btn = ev.target.closest('button');
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    const payload = { path, filename, target_type: type };
+    if (type === 'vm') payload.serial = serial;
+    else { payload.device_id = deviceId; payload.package = pkg; }
+
+    const res = await api('POST', '/api/autoexec/delete-file', payload);
+    if (res && res.success) {
+        showToast(`File "${filename}" dihapus`, 'success');
+        // Refresh scan results jika masih ada scan aktif
+        if (_autoexecScanId) fetchAutoexecResult();
+    } else {
+        showToast('Gagal hapus: ' + (res?.error || 'unknown'), 'error');
+        btn.innerHTML = origHtml;
+        btn.disabled = false;
+    }
 }
 
 function renderVmAccountMap() {

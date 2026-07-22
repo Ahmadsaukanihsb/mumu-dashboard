@@ -6,9 +6,9 @@ from flask import Blueprint, jsonify, request
 
 from models import accounts, settings, log_activity
 from services.adb import (
-    get_serial, adb_connect, detect_autoexec_folders
+    get_serial, adb_connect, adb_cmd, detect_autoexec_folders
 )
-from blueprints.remote import remote_monitors
+from blueprints.remote import remote_monitors, device_health
 
 autoexec_bp = Blueprint('autoexec', __name__)
 
@@ -105,13 +105,18 @@ def scan_autoexec():
     # --- Scan cloudphone (async via command queue) ---
     cloudphone_accounts = []
     if include_cloudphone:
+        now = time.time()
         for acc in accounts:
             if acc.get('device_id') and acc.get('package_name'):
-                # Cek device online
                 did = acc['device_id']
+                # Cek online dari dua sumber: remote_monitors.last_report dan device_health.updated_at
                 info = remote_monitors.get(did, {})
                 last_report = info.get('last_report', 0)
-                is_online = (time.time() - last_report) < 180 if last_report > 0 else False
+                health = device_health.get(did, {})
+                health_updated = health.get('updated_at', 0)
+                # Device dianggap online jika salah satu sumber < 180 detik
+                latest = max(last_report, health_updated)
+                is_online = (now - latest) < 180 if latest > 0 else False
                 cloudphone_accounts.append((acc, is_online))
 
         for acc, is_online in cloudphone_accounts:
@@ -230,3 +235,68 @@ def autoexec_report():
 
     log_activity(f'Autoexec report dari {device_id}: {len(found)} folders')
     return jsonify({'success': True, 'updated': updated})
+
+
+# ---------------------------------------------------------------- DELETE FILE
+
+@autoexec_bp.route('/api/autoexec/delete-file', methods=['POST'])
+def delete_autoexec_file():
+    """Hapus file dari folder auto-execute di VM atau cloudphone."""
+    data = request.get_json(silent=True) or {}
+    path = data.get('path', '').strip()
+    filename = data.get('filename', '').strip()
+    target_type = data.get('target_type', 'vm')  # 'vm' | 'cloudphone'
+    serial = data.get('serial', '').strip()
+    device_id = data.get('device_id', '').strip()
+    package = data.get('package', '').strip()
+
+    if not path or not filename:
+        return jsonify({'error': 'path dan filename wajib diisi'}), 400
+
+    # Validasi filename (anti path traversal)
+    if '/' in filename or '\\' in filename or '..' in filename:
+        return jsonify({'error': 'Nama file tidak valid'}), 400
+
+    # Validasi path harus mengandung autoexec/autoexecute (safety)
+    if 'autoexec' not in path.lower():
+        return jsonify({'error': 'Path harus berupa folder auto-execute'}), 400
+
+    full_path = f'{path.rstrip("/")}/{filename}'
+
+    if target_type == 'vm':
+        if not serial:
+            return jsonify({'error': 'serial wajib untuk VM'}), 400
+        ok, msg = adb_connect(serial)
+        if not ok:
+            return jsonify({'error': f'ADB: {msg}'}), 500
+        code, out = adb_cmd(['shell', f'rm -f "{full_path}"'], serial)
+        if code == 0:
+            log_activity(f'Autoexec file dihapus: {full_path} (VM {serial})')
+            return jsonify({'success': True, 'message': f'File {filename} dihapus'})
+        return jsonify({'error': f'Gagal hapus: {out}'}), 500
+
+    elif target_type == 'cloudphone':
+        if not device_id:
+            return jsonify({'error': 'device_id wajib untuk cloudphone'}), 400
+        # Kirim command ke remote monitor
+        from blueprints.mailbox import mailbox_commands, mailbox_results, command_lock
+        import uuid as _uuid
+        cmd_id = f'del-autoexec-{_uuid.uuid4().hex[:8]}'
+        command = {
+            'id': cmd_id,
+            'type': 'delete_autoexec_file',
+            'account': '',
+            'package': package,
+            'device_id': device_id,
+            'file_path': full_path,
+            'timestamp': time.time(),
+            'status': 'pending',
+        }
+        with command_lock:
+            mailbox_commands.append(command)
+            mailbox_results[cmd_id] = {'status': 'pending', 'message': 'Menunggu remote monitor...'}
+        log_activity(f'Autoexec delete queued: {full_path} (cloudphone {device_id})')
+        return jsonify({'success': True, 'command_id': cmd_id,
+                        'message': f'Delete command dikirim ke {device_id}'})
+
+    return jsonify({'error': 'target_type tidak valid'}), 400
