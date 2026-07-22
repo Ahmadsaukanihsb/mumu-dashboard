@@ -2253,49 +2253,6 @@ function switchScriptTab(tab) {
     if (tab === 'delta') { loadDeltaKeys(); loadDeltaLogs(); }
 }
 
-async function generateMailboxScript() {
-    const targetId = document.getElementById('scriptTargetId').value;
-    const targetName = document.getElementById('scriptTargetName').value || 'Player';
-    const batchSize = document.getElementById('scriptBatchSize').value || 25;
-    const delay = document.getElementById('scriptDelay').value || 8;
-    
-    if (!targetId) {
-        showToast('Masukkan Target Player ID', 'warning');
-        return;
-    }
-    
-    try {
-        const res = await api('GET', `/api/generate-mailbox-script?target_id=${targetId}&target_name=${encodeURIComponent(targetName)}&batch_size=${batchSize}&delay=${delay}`);
-        if (res && res.script) {
-            document.getElementById('mailboxScriptOutput').textContent = res.script;
-            showToast('Mailbox script generated!', 'success');
-        } else {
-            showToast('Gagal generate script', 'error');
-        }
-    } catch (e) {
-        showToast(`Error: ${e.message}`, 'error');
-    }
-}
-
-async function copyMailboxScript() {
-    const el = document.getElementById('mailboxScriptOutput');
-    if (el.textContent.startsWith('Klik')) {
-        showToast('Generate script dulu', 'warning');
-        return;
-    }
-    try {
-        await navigator.clipboard.writeText(el.textContent);
-        showToast('Script copied!', 'success');
-    } catch {
-        const range = document.createRange();
-        range.selectNode(el);
-        window.getSelection().removeAllRanges();
-        window.getSelection().addRange(range);
-        document.execCommand('copy');
-        window.getSelection().removeAllRanges();
-    }
-}
-
 // ==================== MY SCRIPTS (Custom Script Library) ====================
 
 let myScripts = [];
