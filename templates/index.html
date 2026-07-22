@@ -1074,10 +1074,25 @@
                             </div>
                         </div>
                         <div class="card-body" id="gift-tab-harvest">
+                            <!-- Auto Send by Value -->
+                            <div style="padding:10px;background:var(--bg-input);border-radius:8px;margin-bottom:12px">
+                                <label style="font-size:11px;font-weight:600;margin-bottom:6px;display:block"><i class="fas fa-bullseye"></i> Kirim Otomatis by Value</label>
+                                <div style="display:flex;gap:6px">
+                                    <input type="text" class="input" id="giftValueInput" placeholder="150m / 1b / 500k" style="flex:1;font-size:12px">
+                                    <button class="btn btn-success" onclick="sendGiftByValue()" id="btnSendByValue">
+                                        <i class="fas fa-paper-plane"></i> Kirim
+                                    </button>
+                                </div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:4px">
+                                    Otomatis pilih fruits senilai target &amp; kirim (butuh scan dulu)
+                                </div>
+                                <div id="giftValuePreview" style="margin-top:8px;display:none;font-size:11px"></div>
+                            </div>
+
                             <button class="btn btn-primary" onclick="loadHarvestFruits()" style="width:100%">
                                 <i class="fas fa-search"></i> Scan Harvest Fruits
                             </button>
-                            
+
                             <div id="harvestFruitsResult" style="margin-top:12px;display:none">
                                 <div style="padding:8px;background:var(--bg-input);border-radius:6px;font-size:11px">
                                     <div style="display:flex;justify-content:space-between;margin-bottom:4px">
@@ -1089,10 +1104,10 @@
                                         <span id="harvestTotalValue" style="color:var(--green)"></span>
                                     </div>
                                 </div>
-                                
+
                                 <div id="harvestFruitsList" style="margin-top:8px;max-height:200px;overflow-y:auto">
                                 </div>
-                                
+
                                 <button class="btn btn-success" onclick="sendHarvestFruits()" style="width:100%;margin-top:8px" id="btnSendHarvestFruits">
                                     <i class="fas fa-paper-plane"></i> Kirim Selected Fruits
                                 </button>

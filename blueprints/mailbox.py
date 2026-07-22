@@ -3,7 +3,7 @@ import urllib.request, urllib.error
 import uuid as _uuid
 from flask import Blueprint, jsonify, request
 from models import settings, inventory_data, harvested_fruits_data, accounts, log_activity
-from tools.fruit_values import FRUIT_VALUES, calculate_fruits_for_value, format_value
+from tools.fruit_values import FRUIT_VALUES, calculate_fruits_for_value, format_value, select_fruits_by_value
 
 mailbox_bp = Blueprint('mailbox', __name__)
 
@@ -398,6 +398,114 @@ def send_gift_batch():
         'target_id': target_id,
         'items_count': len(gift_items)
     })
+
+
+def _parse_value_input(raw):
+    """Parse '150m', '1.5b', '500k', '1000000' → float. Return None on error."""
+    try:
+        if isinstance(raw, (int, float)):
+            return float(raw)
+        s = str(raw).lower().strip().replace(',', '')
+        if s.endswith('b'):
+            return float(s[:-1]) * 1_000_000_000
+        if s.endswith('m'):
+            return float(s[:-1]) * 1_000_000
+        if s.endswith('k'):
+            return float(s[:-1]) * 1_000
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+@mailbox_bp.route('/api/mailbox/send-by-value', methods=['POST'])
+def send_by_value():
+    """Auto-select harvest fruits to reach target value and queue as ONE batch gift."""
+    data = request.json or {}
+    account = data.get('account', '')
+    target_username = data.get('targetUsername', '')
+    raw_value = data.get('value', '')
+    note = data.get('note', '')
+
+    if not account:
+        return jsonify({'error': 'Pilih akun dulu'}), 400
+    if not target_username:
+        return jsonify({'error': 'Username target required'}), 400
+
+    target_value = _parse_value_input(raw_value)
+    if not target_value or target_value <= 0:
+        return jsonify({'error': 'Format value salah. Contoh: 150m, 1b, 500k'}), 400
+
+    # Ambil harvest fruits data
+    hf = harvested_fruits_data.get(account)
+    if not hf or not hf.get('fruits'):
+        return jsonify({'error': f'Tidak ada harvest fruits untuk {account}. Jalankan scan dulu.'}), 400
+
+    fruits = hf['fruits']
+
+    # Pastikan value terhitung (sama seperti di receive_harvest_fruits)
+    from tools.fruit_values import MUTATION_MULTIPLIERS
+    for f in fruits:
+        if 'value' not in f or not f.get('value'):
+            name = f.get('fruitName', '')
+            weight = float(f.get('weight', 0) or 0)
+            mutation = f.get('mutation', 'None')
+            base_info = FRUIT_VALUES.get(name, {})
+            base_per_kg = base_info.get('value', 0) if isinstance(base_info, dict) else 0
+            mut_mult = MUTATION_MULTIPLIERS.get(mutation, 1)
+            f['value'] = round(base_per_kg * weight * mut_mult)
+        if 'totalValue' not in f:
+            f['totalValue'] = f.get('value', 0) * f.get('count', 1)
+
+    # Auto-select fruits
+    selected, total_selected, remaining = select_fruits_by_value(target_value, fruits)
+
+    if not selected:
+        return jsonify({'error': 'Tidak ada fruits dengan ID valid untuk dikirim'}), 400
+
+    # Lookup target user (1x)
+    target_id = lookup_user_id(target_username)
+    if target_id == 0:
+        return jsonify({'error': f'User "{target_username}" tidak ditemukan'}), 400
+
+    # Build gift items — satu entry per fruit yang dipilih
+    gift_items = []
+    for s in selected:
+        gift_items.append({'id': s['id'], 'name': s['fruitName']})
+
+    cmd_id = f"giftv_{_uuid.uuid4().hex[:12]}"
+    command = {
+        'id': cmd_id,
+        'type': 'send_gift_batch',
+        'account': account,
+        'target': target_username,
+        'target_id': target_id,
+        'items': gift_items,
+        'note': note or f'Value gift: {format_value(total_selected)}',
+        'timestamp': time.time(),
+        'status': 'pending'
+    }
+
+    with command_lock:
+        mailbox_commands.append(command)
+        mailbox_results[cmd_id] = {'status': 'pending', 'message': f'Menunggu executor... ({len(gift_items)} fruits)'}
+
+    log_activity(f'[Gift] By-value: {format_value(total_selected)} ({len(gift_items)} fruits) → {target_username}')
+
+    return jsonify({
+        'success': True,
+        'command_id': cmd_id,
+        'message': f'{len(gift_items)} fruits ({format_value(total_selected)}) → {target_username}',
+        'target_id': target_id,
+        'selected': [{'fruitName': s['fruitName'], 'mutation': s['mutation'],
+                      'weight': s['weight'], 'value': s['value'],
+                      'subtotal': s['subtotal']} for s in selected],
+        'total_value': total_selected,
+        'formatted_value': format_value(total_selected),
+        'target_value': target_value,
+        'remaining': remaining,
+        'items_count': len(gift_items)
+    })
+
 
 @mailbox_bp.route('/api/mailbox/commands', methods=['GET'])
 def get_commands():

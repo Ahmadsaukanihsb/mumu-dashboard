@@ -3258,6 +3258,71 @@ async function sendHarvestFruits() {
     btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim Selected Fruits';
 }
 
+async function sendGiftByValue() {
+    const account = document.getElementById('mailboxAccountSelect').value;
+    const target = mailboxTargets[0];
+    const valueInput = document.getElementById('giftValueInput').value.trim();
+
+    if (!account) { showToast('Pilih akun dulu', 'warning'); return; }
+    if (!target) { showToast('Tambah target dulu', 'warning'); return; }
+    if (!valueInput) { showToast('Masukkan target value (contoh: 150m)', 'warning'); return; }
+
+    const btn = document.getElementById('btnSendByValue');
+    const preview = document.getElementById('giftValuePreview');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    preview.style.display = 'none';
+
+    try {
+        const res = await api('POST', '/api/mailbox/send-by-value', {
+            account,
+            targetUsername: target,
+            value: valueInput,
+            note: `Value gift: ${valueInput}`
+        });
+
+        if (res && res.success) {
+            showToast(`${res.items_count} fruits (${res.formatted_value}) → ${target}`, 'success');
+            addMailboxHistory('send', res.items_count, target,
+                `By value: ${res.formatted_value} (${res.items_count} fruits)`);
+            pollCommandResult(res.command_id, target);
+
+            // Show preview of selected fruits
+            let html = `<div style="padding:8px;background:rgba(34,197,94,0.1);border-radius:6px;border:1px solid rgba(34,197,94,0.3)">
+                <div style="font-weight:600;color:var(--green);margin-bottom:4px">
+                    <i class="fas fa-check-circle"></i> ${res.items_count} fruits dipilih (${res.formatted_value})
+                </div>`;
+            for (const s of (res.selected || []).slice(0, 8)) {
+                html += `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:10px;color:var(--text-muted)">
+                    <span>${esc(s.fruitName)}${s.mutation !== 'None' ? ' [' + esc(s.mutation) + ']' : ''} (${s.weight?.toFixed(1)}kg)</span>
+                    <span style="color:var(--green)">${(s.subtotal || 0).toLocaleString()}</span>
+                </div>`;
+            }
+            if ((res.selected || []).length > 8) {
+                html += `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">...dan ${res.selected.length - 8} lainnya</div>`;
+            }
+            if (res.remaining > 0) {
+                html += `<div style="font-size:10px;color:var(--yellow);margin-top:4px"><i class="fas fa-exclamation-triangle"></i> Kurang ${res.remaining.toLocaleString()} dari target</div>`;
+            }
+            html += '</div>';
+            preview.innerHTML = html;
+            preview.style.display = 'block';
+
+            // Refresh harvest fruits list
+            loadHarvestFruits();
+        } else {
+            showToast('Gagal: ' + (res?.error || 'unknown'), 'error');
+            addMailboxHistory('failed', 0, target, res?.error || 'unknown');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+        addMailboxHistory('failed', 0, target, e.message);
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim';
+}
+
 // ==================== INIT ====================
 
 async function initMailbox() {

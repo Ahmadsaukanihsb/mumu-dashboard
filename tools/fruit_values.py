@@ -117,3 +117,71 @@ def format_value(value):
         return f"{value / 1_000:.1f}K"
     else:
         return str(value)
+
+
+def select_fruits_by_value(target_value, fruits):
+    """
+    Pilih kombinasi fruits agar total value >= target_value.
+    fruits: list of dict dengan keys: fruitName, mutation, weight, id, count, value, totalValue
+    Strategi: sort by value_per_item (descending), greedy pick sampai target tercapai.
+    Return: (selected_fruits, total_value, remaining_target)
+    """
+    if not fruits:
+        return [], 0, target_value
+
+    # Hitung value per item (per 1 fruit, bukan per count)
+    items = []
+    for f in fruits:
+        item_id = f.get('id', '')
+        if not item_id:
+            continue
+        value_per = f.get('value', 0)
+        count = f.get('count', 1)
+        items.append({
+            'id': item_id,
+            'fruitName': f.get('fruitName', '?'),
+            'mutation': f.get('mutation', 'None'),
+            'weight': f.get('weight', 0),
+            'value': value_per,
+            'count': count,
+            'totalValue': value_per * count,
+        })
+
+    # Sort by value per item (highest first) — greedy
+    items.sort(key=lambda x: x['value'], reverse=True)
+
+    selected = []
+    total = 0
+    remaining = target_value
+
+    for item in items:
+        if remaining <= 0:
+            break
+        # Ambil semua count dari item ini jika perlu
+        needed = int(remaining / item['value']) if item['value'] > 0 else 0
+        if needed <= 0:
+            # Satu item saja sudah cukup atau melebihi sisa target
+            take = 1
+        else:
+            take = min(item['count'], needed)
+            # Jika mengambil semua count masih kurang, ambil semua
+            if take == 0:
+                take = 1
+
+        if take > item['count']:
+            take = item['count']
+
+        selected.append({
+            'id': item['id'],
+            'fruitName': item['fruitName'],
+            'mutation': item['mutation'],
+            'weight': item['weight'],
+            'value': item['value'],
+            'take': take,
+            'subtotal': item['value'] * take,
+        })
+        total += item['value'] * take
+        remaining = target_value - total
+
+    return selected, total, max(0, remaining)
+
