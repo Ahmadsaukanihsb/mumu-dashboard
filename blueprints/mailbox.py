@@ -460,7 +460,7 @@ def send_by_value():
     selected, total_selected, remaining = select_fruits_by_value(target_value, fruits)
 
     if not selected:
-        return jsonify({'error': 'Tidak ada fruits dengan ID valid untuk dikirim'}), 400
+        return jsonify({'error': 'Tidak ada fruits valid untuk dikirim (hanya fruits yang dikenali yang bisa dikirim)'}), 400
 
     # Lookup target user (1x)
     target_id = lookup_user_id(target_username)

@@ -130,16 +130,23 @@ def select_fruits_by_value(target_value, fruits):
         return [], 0, target_value
 
     # Hitung value per item (per 1 fruit, bukan per count)
+    # HANYA fruits yang dikenali di FRUIT_VALUES — seeds/seed packs di-skip (value=0)
     items = []
     for f in fruits:
         item_id = f.get('id', '')
         if not item_id:
             continue
+        name = f.get('fruitName', '')
+        # Hanya item yang ada di FRUIT_VALUES yang boleh dikirim
+        if name not in FRUIT_VALUES:
+            continue
         value_per = f.get('value', 0)
+        if value_per <= 0:
+            continue
         count = f.get('count', 1)
         items.append({
             'id': item_id,
-            'fruitName': f.get('fruitName', '?'),
+            'fruitName': name,
             'mutation': f.get('mutation', 'None'),
             'weight': f.get('weight', 0),
             'value': value_per,
@@ -157,14 +164,13 @@ def select_fruits_by_value(target_value, fruits):
     for item in items:
         if remaining <= 0:
             break
-        # Ambil semua count dari item ini jika perlu
+        # Berapa item ini yang dibutuhkan untuk menutup sisa target
         needed = int(remaining / item['value']) if item['value'] > 0 else 0
         if needed <= 0:
-            # Satu item saja sudah cukup atau melebihi sisa target
+            # Satu item sudah cukup/melebihi sisa target — ambil 1
             take = 1
         else:
             take = min(item['count'], needed)
-            # Jika mengambil semua count masih kurang, ambil semua
             if take == 0:
                 take = 1
 
