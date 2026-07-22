@@ -691,9 +691,6 @@
                         <button class="btn btn-sm btn-secondary script-tab" data-script="mailbox" onclick="switchScriptTab('mailbox')">
                             <i class="fas fa-envelope"></i> Mailbox Script
                         </button>
-                        <button class="btn btn-sm btn-secondary script-tab" data-script="custom" onclick="switchScriptTab('custom')">
-                            <i class="fas fa-code"></i> Custom Batch
-                        </button>
                         <button class="btn btn-sm btn-secondary script-tab" data-script="myscripts" onclick="switchScriptTab('myscripts')">
                             <i class="fas fa-folder-open"></i> My Scripts
                         </button>
@@ -780,44 +777,6 @@
                         </div>
                     </div>
                     
-                    <!-- Custom Batch Script Tab -->
-                    <div class="script-content" id="script-custom" style="display:none">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-code"></i> Custom Batch Script</h3>
-                                <div style="display:flex;gap:8px">
-                                    <button class="btn btn-primary" onclick="generateCustomBatchScript()"><i class="fas fa-magic"></i> Generate</button>
-                                    <button class="btn btn-secondary" onclick="copyCustomBatchScript()"><i class="fas fa-copy"></i> Copy</button>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-                                    <div class="form-group">
-                                        <label>Target Player ID</label>
-                                        <input type="number" class="input" id="customTargetId" placeholder="1787101535" style="font-size:12px">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Target Name</label>
-                                        <input type="text" class="input" id="customTargetName" placeholder="alimskri" style="font-size:12px">
-                                    </div>
-                                    <div class="form-group" style="grid-column:1/-1">
-                                        <label>Items (satu per baris: Category|ItemKey)</label>
-                                        <textarea class="input" id="customItems" rows="5" placeholder="Pets|uuid-1&#10;Pets|uuid-2&#10;Gnomes|Gnome" style="font-size:11px;font-family:var(--font-mono)"></textarea>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Note</label>
-                                        <input type="text" class="input" id="customNote" placeholder="Custom batch" style="font-size:12px">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Batch Size</label>
-                                        <input type="number" class="input" id="customBatchSize" value="25" min="1" max="100" style="font-size:12px">
-                                    </div>
-                                </div>
-                                <pre class="code-block code-block-full" id="customBatchScriptOutput" style="max-height:400px;overflow:auto">Masukkan items dan klik "Generate"...</pre>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- My Scripts Tab -->
                     <div class="script-content" id="script-myscripts" style="display:none">
                         <!-- Editor Card -->
