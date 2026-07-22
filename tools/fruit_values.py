@@ -165,14 +165,20 @@ def select_fruits_by_value(target_value, fruits):
         if remaining <= 0:
             break
         # Berapa item ini yang dibutuhkan untuk menutup sisa target
-        needed = int(remaining / item['value']) if item['value'] > 0 else 0
-        if needed <= 0:
-            # Satu item sudah cukup/melebihi sisa target — ambil 1
-            take = 1
-        else:
+        if item['value'] <= 0:
+            continue
+        needed = int(remaining / item['value'])
+        if needed >= 1:
+            # Butuh minimal 1 dari item ini — ambil sebanyak yang diperlukan
             take = min(item['count'], needed)
-            if take == 0:
+        else:
+            # Item ini terlalu mahal untuk sisa target.
+            # Ambil 1 HANYA jika totalnya tidak melebihi 2x target
+            # (untuk menghindari kirim 10M fruit untuk target 100k)
+            if item['value'] <= target_value * 2:
                 take = 1
+            else:
+                continue
 
         if take > item['count']:
             take = item['count']
