@@ -31,7 +31,6 @@ SEED_LIST = [
     {"id": "greenbean", "name": "Green Bean", "price": 12, "rarity": "Epic"},
     {"id": "baby_cactus", "name": "Baby Cactus", "price": 45, "rarity": "Rare"},
     {"id": "horned_melon", "name": "Horned Melon", "price": 55, "rarity": "Rare"},
-    {"id": "bamboo_rare", "name": "Bamboo (Rare)", "price": 200, "rarity": "Rare"},
     {"id": "glow_mushroom", "name": "Glow Mushroom", "price": 120, "rarity": "Epic"},
     {"id": "mushroom", "name": "Mushroom", "price": 80, "rarity": "Epic"},
     {"id": "poison_apple", "name": "Poison Apple", "price": 300, "rarity": "Mythic"},
@@ -40,6 +39,17 @@ SEED_LIST = [
     {"id": "venus_flytrap", "name": "Venus Fly Trap", "price": 500, "rarity": "Mythic"},
     {"id": "fire_fern", "name": "Fire Fern", "price": 180, "rarity": "Legendary"},
     {"id": "poison_ivy", "name": "Poison Ivy", "price": 350, "rarity": "Legendary"},
+    {"id": "rocket_pop", "name": "Rocket Pop", "price": 600, "rarity": "Mythic"},
+    {"id": "moon_bloom", "name": "Moon Bloom", "price": 700, "rarity": "Super"},
+    {"id": "sun_bloom", "name": "Sun Bloom", "price": 700, "rarity": "Super"},
+    {"id": "hypno_bloom", "name": "Hypno Bloom", "price": 800, "rarity": "Super"},
+    {"id": "dragons_breath", "name": "Dragon's Breath", "price": 900, "rarity": "Super"},
+    {"id": "star_fruit", "name": "Star Fruit", "price": 1000, "rarity": "Super"},
+    {"id": "briar_rose", "name": "Briar Rose", "price": 1100, "rarity": "Super"},
+    {"id": "cinnamon_stick", "name": "Cinnamon Stick", "price": 1200, "rarity": "Super"},
+    {"id": "conifer_cone", "name": "Conifer Cone", "price": 1300, "rarity": "Super"},
+    {"id": "plum", "name": "Plum", "price": 1400, "rarity": "Super"},
+    {"id": "eclipse_bloom", "name": "Eclipse Bloom", "price": 1500, "rarity": "Super"},
 ]
 
 @seed_shop_bp.route('/api/seed-shop/seeds', methods=['GET'])

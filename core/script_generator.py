@@ -459,14 +459,36 @@ end)
 
 -- ==================== SEED SHOP AUTO-BUY ====================
 task.spawn(function()
+    -- Seed ID to game name mapping (matches dashboard config IDs)
+    local SEED_ID_MAP = {{
+        bamboo = "Bamboo", carrot = "Carrot", strawberry = "Strawberry",
+        blueberry = "Blueberry", tomato = "Tomato", corn = "Corn",
+        pineapple = "Pineapple", apple = "Apple", banana = "Banana",
+        grape = "Grape", mango = "Mango", coconut = "Coconut",
+        dragonfruit = "Dragon Fruit", cherry = "Cherry", acorn = "Acorn",
+        sunflower = "Sunflower", cactus = "Cactus", tulip = "Tulip",
+        greenbean = "Green Bean", baby_cactus = "Baby Cactus",
+        horned_melon = "Horned Melon", bamboo_rare = "Bamboo (Rare)",
+        glow_mushroom = "Glow Mushroom", mushroom = "Mushroom",
+        poison_apple = "Poison Apple", pomegranate = "Pomegranate",
+        ghost_pepper = "Ghost Pepper", venus_flytrap = "Venus Fly Trap",
+        fire_fern = "Fire Fern", poison_ivy = "Poison Ivy",
+        rocket_pop = "Rocket Pop", moon_bloom = "Moon Bloom",
+        sun_bloom = "Sun Bloom", hypno_bloom = "Hypno Bloom",
+        dragons_breath = "Dragon's Breath", star_fruit = "Star Fruit",
+        briar_rose = "Briar Rose", cinnamon_stick = "Cinnamon Stick",
+        conifer_cone = "Conifer Cone", plum = "Plum",
+        eclipse_bloom = "Eclipse Bloom",
+    }}
+
     while task.wait(60) do
         pcall(function()
             local configResp = httpGet(URL .. "/api/seed-shop/config")
             if not configResp then return end
-            
+
             local configData = HttpService:JSONDecode(configResp)
             local config = configData.config or {{}}
-            
+
             local hasEnabled = false
             for seedId, seedConfig in pairs(config) do
                 if seedConfig.enabled then
@@ -475,48 +497,82 @@ task.spawn(function()
                 end
             end
             if not hasEnabled then return end
-            
-            local pg = LP:FindFirstChild("PlayerGui")
-            if not pg then return end
-            
-            local shopUI = pg:FindFirstChild("SeedShopUI") or pg:FindFirstChild("ShopUI")
-            if not shopUI then return end
-            
+
+            local networking = require(ReplicatedStorage.SharedModules.Networking)
             local bought = {{}}
             local failed = {{}}
-            
-            local seedFrames = shopUI:GetDescendants()
-            for _, frame in ipairs(seedFrames) do
-                if frame:IsA("Frame") and frame.Name:match("Seed") then
-                    local seedName = frame.Name:gsub("Seed_", ""):gsub("_", " ")
-                    
-                    for seedId, seedConfig in pairs(config) do
-                        if seedConfig.enabled and seedId:lower() == seedName:lower() then
-                            local buyBtn = frame:FindFirstChild("BuyButton") or frame:FindFirstChild("Button")
-                            if buyBtn and buyBtn:IsA("TextButton") then
-                                local count = 0
-                                local maxQty = seedConfig.max_qty or 10
-                                
-                                for i = 1, maxQty do
-                                    pcall(function()
-                                        buyBtn.MouseButton1Click:Fire()
-                                        count = count + 1
-                                    end)
-                                    task.wait(0.5)
-                                end
-                                
-                                if count > 0 then
-                                    table.insert(bought, {{name = seedName, count = count}})
-                                else
-                                    table.insert(failed, {{name = seedName, reason = "Buy button not found"}})
+
+            -- Read current stock from game
+            local stockResult = nil
+            pcall(function()
+                stockResult = networking.FruitStock.Request:Fire()
+            end)
+            local stockEntries = stockResult and stockResult.entries or {{}}
+
+            for seedId, seedConfig in pairs(config) do
+                if seedConfig.enabled then
+                    local gameName = SEED_ID_MAP[seedId:lower()]
+                    if gameName then
+                        -- Check if seed is in stock (from game stock data)
+                        local inStock = false
+                        local stockQty = 0
+                        for name, data in pairs(stockEntries) do
+                            if name:lower() == gameName:lower() then
+                                inStock = true
+                                stockQty = data.multiplier or 0
+                                break
+                            end
+                        end
+
+                        -- Also check GUI for real stock count (x0 in Stock = no stock)
+                        local pg = LP:FindFirstChild("PlayerGui")
+                        local guiStock = nil
+                        if pg then
+                            local normalShop = pg:FindFirstChild("SeedShop")
+                            if normalShop then
+                                local frame = normalShop.Frame.NormalShop:FindFirstChild(gameName)
+                                if frame then
+                                    local main = frame:FindFirstChild("Main_Frame")
+                                    if main then
+                                        local stockText = main:FindFirstChild("Stock_Text")
+                                        if stockText then
+                                            guiStock = stockText.Text
+                                        end
+                                    end
                                 end
                             end
-                            break
+                        end
+
+                        -- Parse GUI stock (e.g., "x8 in Stock" → 8, "x0 in Stock" → 0)
+                        local availableQty = 0
+                        if guiStock then
+                            local num = guiStock:match("x(%d+)")
+                            if num then
+                                availableQty = tonumber(num) or 0
+                            end
+                        elseif inStock then
+                            availableQty = 1  -- fallback: assume at least 1 if in stock list
+                        end
+
+                        if availableQty > 0 then
+                            local maxQty = seedConfig.max_qty or 10
+                            local buyQty = math.min(maxQty, availableQty)
+
+                            local ok, err = pcall(function()
+                                networking.SeedShop.PurchaseSeed:Fire(gameName, buyQty)
+                            end)
+
+                            if ok then
+                                table.insert(bought, {{name = gameName, count = buyQty, cost = seedConfig.max_qty}})
+                                notify("Bought " .. buyQty .. "x " .. gameName, 5)
+                            else
+                                table.insert(failed, {{name = gameName, reason = tostring(err)}})
+                            end
                         end
                     end
                 end
             end
-            
+
             if #bought > 0 or #failed > 0 then
                 local statusData = HttpService:JSONEncode({{
                     account = LP.Name,

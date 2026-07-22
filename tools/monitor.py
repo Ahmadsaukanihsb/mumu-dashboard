@@ -58,7 +58,6 @@ def monitor_loop():
                         st = monitor_state.setdefault(acc_id, {})
                         if 'last_intent' not in st:
                             st['last_intent'] = time.time()
-                        st['in_game'] = False
                         st['tc_history'] = []
                     save_data()
 
@@ -108,7 +107,7 @@ def monitor_loop():
                 if running and was_active:
                     with _data_lock:
                         st = monitor_state.setdefault(acc_id, {})
-                        was_in_game = st.get('in_game', True)
+                        was_in_game = st.get('in_game', False)
                     tc = adb_get_thread_count(serial, package)
                     foreground = adb_check_in_foreground(serial, package)
                     network = adb_check_network_active(serial, package)
@@ -118,6 +117,12 @@ def monitor_loop():
                             st['last_tc'] = tc
                         threshold = settings.get('thread_threshold', 80)
                         in_game = tc >= threshold and foreground
+                        if not in_game and tc >= threshold:
+                            # Fallback: check UI directly when thread count is high but foreground check fails
+                            ui_check = adb_check_in_game(serial, package)
+                            if ui_check is True:
+                                in_game = True
+                                foreground = True
                         game_start = st.get('in_game_since', 0)
                         if in_game and game_start == 0:
                             st['in_game_since'] = now

@@ -127,6 +127,25 @@ class RootMonitor:
                     return 'kicked_dialog'
         return None
 
+    def check_in_game(self, package='com.roblox.client'):
+        """Check if app is actually in-game (not just running) by looking at UI."""
+        pid = self.get_pid(package)
+        if not pid:
+            return None
+        # Check if the app has multiple windows (indicates in-game vs home screen)
+        code, out = self.su_cmd('dumpsys window windows')
+        if code == 0:
+            rblx_windows = 0
+            for line in out.split('\n'):
+                if line.startswith('  Window #') and package in line:
+                    if 'mIsFloatingLayer=true' not in line:
+                        rblx_windows += 1
+            if rblx_windows >= 2:
+                return True
+            if rblx_windows == 0:
+                return None
+        return None
+
     def dismiss_dialogs(self):
         for _ in range(3):
             self.su_cmd('input keyevent KEYCODE_BACK')
@@ -740,6 +759,7 @@ class RootMonitor:
 
                     tc = self.get_thread_count(pkg)
                     kicked = self.detect_kicked(pkg)
+                    in_game_ui = self.check_in_game(pkg)
 
                     last = self._last_rejoin.get(pkg, 0)
                     if now - last < 60 and tc is not None and tc < thread_threshold:
@@ -760,12 +780,14 @@ class RootMonitor:
                             print(f'[{account_name}] → NO JOIN LINK!')
                         continue
 
-                    if tc is not None and tc >= thread_threshold:
-                        print(f'[{account_name}] IN-GAME (tc={tc})')
+                    # In-game detection: thread count OR UI check
+                    is_in_game = (tc is not None and tc >= thread_threshold) or in_game_ui is True
+                    if is_in_game:
+                        print(f'[{account_name}] IN-GAME (tc={tc}, ui={in_game_ui})')
                         self.report_status(account_name, pkg, 'in_game', tc=tc)
                         self._last_rejoin[pkg] = now
                     elif tc is not None:
-                        print(f'[{account_name}] HOME SCREEN (tc={tc})')
+                        print(f'[{account_name}] HOME SCREEN (tc={tc}, ui={in_game_ui})')
                         self.report_status(account_name, pkg, 'monitoring', tc=tc)
                         last = self._last_rejoin.get(pkg, 0)
                         if now - last >= 60:
@@ -778,7 +800,7 @@ class RootMonitor:
                             if tc < 10:
                                 self.dismiss_dialogs()
                     else:
-                        print(f'[{account_name}] RUNNING (tc=unknown)')
+                        print(f'[{account_name}] RUNNING (tc=unknown, ui={in_game_ui})')
                         self.report_status(account_name, pkg, 'monitoring', tc=None)
                         last = self._last_rejoin.get(pkg, 0)
                         if now - last >= 60:
