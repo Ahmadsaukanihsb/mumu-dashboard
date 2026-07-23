@@ -7,6 +7,35 @@ from config import IS_ARM
 _delta_lock = threading.Lock()
 delta_key_store = {}
 
+# Whitelist domains allowed for bypass (prevents SSRF)
+_BYPASS_ALLOWED_DOMAINS = {
+    'linkvertise.com', 'www.linkvertise.com',
+    'lootlabs.gg', 'www.lootlabs.gg',
+    'auth.platorelay.com',
+    'baconbypass.xyz', 'www.baconbypass.xyz',
+    'gateway.platorelay.com',
+    'link-hub.net', 'www.link-hub.net',
+    'direct-link.net', 'www.direct-link.net',
+    'link-target.net', 'www.link-target.net',
+    'link-center.net', 'www.link-center.net',
+    'linkvertise.download',
+}
+
+def _is_allowed_bypass_url(url):
+    """Check if URL is from an allowed bypass domain."""
+    if not url:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = (parsed.hostname or '').lower()
+        if not host:
+            return False
+        return host in _BYPASS_ALLOWED_DOMAINS or any(
+            host.endswith('.' + d) for d in _BYPASS_ALLOWED_DOMAINS
+        )
+    except Exception:
+        return False
+
 def delta_get_link_from_ui(serial):
     adb = find_adb()
     if not adb: return None
@@ -144,9 +173,10 @@ def delta_bypass_via_playwright(url):
         from playwright.sync_api import sync_playwright
     except ImportError:
         return None
+    browser = None
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={'width': 1280, 'height': 720})
             page.goto('https://baconbypass.xyz/', timeout=30000, wait_until='domcontentloaded')
             time.sleep(3)
@@ -174,9 +204,12 @@ def delta_bypass_via_playwright(url):
                         return urls[0]
                     browser.close()
                     return result.strip()
-            browser.close()
-    except:
-        pass
+    except Exception as e:
+        print(f'[DELTA] Playwright bypass error: {e}')
+    finally:
+        if browser:
+            try: browser.close()
+            except: pass
     return None
 
 def delta_bypass_via_playwright_lootlabs(url):
@@ -184,11 +217,12 @@ def delta_bypass_via_playwright_lootlabs(url):
         from playwright.sync_api import sync_playwright
     except ImportError:
         return None
+    browser = None
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
-                headless=False,
-                args=['--no-sandbox', '--disable-blink-features=AutomationControlled']
+                headless=True,
+                args=['--disable-blink-features=AutomationControlled']
             )
             ctx = browser.new_context(
                 viewport={'width': 1280, 'height': 720},
@@ -258,7 +292,6 @@ def delta_bypass_via_playwright_lootlabs(url):
                     page.evaluate("() => { document.querySelector('button:not([disabled])')?.click() }")
                 elif attempt == 0:
                     page.evaluate("() => { document.querySelector('button')?.click() }")
-            browser.close()
             print('[KEY] No key obtained via acceleration')
             return None
     except Exception as e:
@@ -266,8 +299,15 @@ def delta_bypass_via_playwright_lootlabs(url):
         import traceback
         traceback.print_exc()
         return None
+    finally:
+        if browser:
+            try: browser.close()
+            except: pass
 
 def delta_bypass_url(url):
+    if not _is_allowed_bypass_url(url):
+        print(f'[DELTA] URL rejected (not in whitelist): {url[:100]}')
+        return None
     key = delta_bypass_via_api(url)
     if key:
         return key
@@ -307,6 +347,20 @@ def delta_find_button(serial, label):
         pass
     return None
 
+def _escape_for_adb_input(text):
+    """Escape special characters for ADB 'input text' command."""
+    return (text.replace('%', '%25')
+                .replace(' ', '%20')
+                .replace('&', '%26')
+                .replace("'", '%27')
+                .replace('"', '%22')
+                .replace(';', '%3B')
+                .replace('<', '%3C')
+                .replace('>', '%3E')
+                .replace('|', '%7C')
+                .replace('\\', '%5C'))
+
+
 def delta_inject_key(serial, key, package='com.roblox.client'):
     adb = find_adb()
     if not adb: return False
@@ -317,12 +371,13 @@ def delta_inject_key(serial, key, package='com.roblox.client'):
         _adb_run([adb, '-s', serial, 'shell', 'input', 'tap', str(pt[0]), str(pt[1])],
             serial=serial, capture_output=True, timeout=5)
         time.sleep(1)
-        key_part = key[:20]
+        escaped = _escape_for_adb_input(key)
+        key_part = escaped[:20]
         _adb_run([adb, '-s', serial, 'shell', 'input', 'text', key_part],
             serial=serial, capture_output=True, timeout=5)
-        if len(key) > 20:
+        if len(escaped) > 20:
             time.sleep(0.3)
-            _adb_run([adb, '-s', serial, 'shell', 'input', 'text', key[20:]],
+            _adb_run([adb, '-s', serial, 'shell', 'input', 'text', escaped[20:]],
                 serial=serial, capture_output=True, timeout=5)
         time.sleep(1)
         verify_pt = delta_find_button(serial, 'VERIFY')
@@ -425,6 +480,9 @@ def delta_auto_get_key(serial, package='com.roblox.client'):
             return None, 'Gagal capture URL key'
 
         print(f'[DELTA] URL captured via method: {url[:120]}...')
+
+        if not _is_allowed_bypass_url(url):
+            return None, f'URL rejected (not in bypass whitelist): {url[:80]}'
 
         _adb_run([adb, '-s', serial, 'shell', 'am', 'force-stop', 'com.android.chrome'],
             serial=serial, capture_output=True, timeout=5)
