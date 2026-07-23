@@ -550,8 +550,6 @@ task.spawn(function()
                             if num then
                                 availableQty = tonumber(num) or 0
                             end
-                        elseif inStock then
-                            availableQty = 1  -- fallback: assume at least 1 if in stock list
                         end
 
                         if availableQty > 0 then
@@ -564,16 +562,64 @@ task.spawn(function()
                                 buyQty = math.min(maxQty, availableQty)
                             end
 
-                            local ok, err = pcall(function()
-                                networking.SeedShop.PurchaseSeed:Fire(gameName, buyQty)
-                            end)
+                            -- Buy ONE AT A TIME and track actual purchases
+                            -- PurchaseSeed:Fire returns nil, so we track by checking
+                            -- if stock decreased after each attempt
+                            local actuallyBought = 0
+                            local buyAttempts = 0
+                            local maxAttempts = buyQty
 
-                            if ok then
-                                table.insert(bought, {{name = gameName, count = buyQty, stock = availableQty}})
-                                notify("Bought " .. buyQty .. "x " .. gameName, 5)
-                            else
-                                table.insert(failed, {{name = gameName, reason = tostring(err)}})
+                            for i = 1, maxAttempts do
+                                -- Re-check stock before each attempt (server may have updated)
+                                local currentStock = 0
+                                local pg2 = LP:FindFirstChild("PlayerGui")
+                                if pg2 then
+                                    local normalShop2 = pg2:FindFirstChild("SeedShop")
+                                    if normalShop2 then
+                                        local frame2 = normalShop2.Frame.NormalShop:FindFirstChild(gameName)
+                                        if frame2 then
+                                            local main2 = frame2:FindFirstChild("Main_Frame")
+                                            if main2 then
+                                                local stockText2 = main2:FindFirstChild("Stock_Text")
+                                                if stockText2 then
+                                                    local num2 = stockText2.Text:match("x(%d+)")
+                                                    if num2 then
+                                                        currentStock = tonumber(num2) or 0
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+
+                                if currentStock <= 0 then
+                                    break  -- Out of stock, stop trying
+                                end
+
+                                buyAttempts = buyAttempts + 1
+                                local ok, err = pcall(function()
+                                    networking.SeedShop.PurchaseSeed:Fire(gameName, 1)
+                                end)
+
+                                if ok then
+                                    actuallyBought = actuallyBought + 1
+                                else
+                                    table.insert(failed, {{name = gameName, reason = tostring(err)}})
+                                    break
+                                end
+
+                                task.wait(0.3)  -- Small delay between purchases
                             end
+
+                            if actuallyBought > 0 then
+                                table.insert(bought, {{name = gameName, count = actuallyBought, requested = buyQty, stock_before = availableQty}})
+                                notify("Bought " .. actuallyBought .. "x " .. gameName .. " (requested: " .. buyQty .. ")", 5)
+                            elseif buyAttempts == 0 then
+                                table.insert(failed, {{name = gameName, reason = "Out of stock or not available"}})
+                            end
+                        else
+                            -- Not in stock — record as failed for status tracking
+                            table.insert(failed, {{name = gameName, reason = "No stock (x0)"}})
                         end
                     end
                 end

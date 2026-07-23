@@ -3324,6 +3324,7 @@ function switchMailboxTab(tab) {
     
     if (tab === 'seedshop') {
         loadSeedShopConfig();
+        loadSeedShopStatus();
     }
 }
 
@@ -3422,11 +3423,81 @@ async function saveSeedShopConfig() {
         const resp = await api('POST', '/api/seed-shop/config', seedShopConfig);
         if (resp && resp.success) {
             showToast('Seed shop config saved!', 'success');
+            loadSeedShopStatus();  // refresh status after save
         } else {
             showToast('Failed to save config', 'error');
         }
     } catch (e) {
         showToast('Error saving config', 'error');
+    }
+}
+
+// ==================== SEED SHOP STATUS ====================
+
+async function loadSeedShopStatus() {
+    try {
+        // Get all accounts with status from the config endpoint
+        const resp = await api('GET', '/api/seed-shop/config');
+        if (resp && resp.status) {
+            renderSeedShopStatus(resp.status);
+        }
+    } catch (e) {
+        console.error('Failed to load seed shop status:', e);
+    }
+}
+
+function renderSeedShopStatus(statusData) {
+    const container = document.getElementById('seedShopStatus');
+    if (!container) return;
+
+    const accounts = Object.keys(statusData);
+    if (accounts.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-clock"></i> Belum ada status auto-buy</div>';
+        return;
+    }
+
+    let html = '';
+    for (const account of accounts) {
+        const data = statusData[account];
+        const bought = data.bought || [];
+        const failed = data.failed || [];
+        const updatedAt = data.updated_at || '';
+
+        if (bought.length === 0 && failed.length === 0) continue;
+
+        html += `<div style="margin-bottom:12px;padding:10px;background:var(--bg-input);border-radius:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-weight:600;font-size:12px"><i class="fas fa-user"></i> ${esc(account)}</span>
+                <span style="font-size:10px;color:var(--text-muted)">${esc(updatedAt)}</span>
+            </div>`;
+
+        if (bought.length > 0) {
+            html += `<div style="margin-bottom:6px">
+                <span style="font-size:11px;color:var(--green);font-weight:600"><i class="fas fa-check-circle"></i> Berhasil dibeli:</span>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">`;
+            for (const b of bought) {
+                html += `<span style="padding:3px 8px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);border-radius:4px;font-size:11px;color:var(--green)">${esc(b.name)} x${b.count || 1}</span>`;
+            }
+            html += `</div></div>`;
+        }
+
+        if (failed.length > 0) {
+            html += `<div>
+                <span style="font-size:11px;color:var(--red);font-weight:600"><i class="fas fa-times-circle"></i> Gagal:</span>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">`;
+            for (const f of failed) {
+                html += `<span style="padding:3px 8px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);border-radius:4px;font-size:11px;color:var(--red)" title="${esc(f.reason || 'unknown')}">${esc(f.name)}</span>`;
+            }
+            html += `</div></div>`;
+        }
+
+        html += `</div>`;
+    }
+
+    if (!html) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-clock"></i> Belum ada status auto-buy</div>';
+    } else {
+        container.innerHTML = html;
     }
 }
 

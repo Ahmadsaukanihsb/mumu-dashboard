@@ -97,5 +97,13 @@ def receive_seed_shop_status():
         'updated_at': time.strftime('%H:%M:%S')
     }
     if bought:
-        log_activity(f'[{account}] Auto-bought {len(bought)} seeds')
+        total_bought = sum(b.get('count', 0) for b in bought)
+        log_activity(f'[{account}] Auto-bought {total_bought} seeds: ' + ', '.join(f'{b.get("name","?")} x{b.get("count",0)}' for b in bought))
+    if failed:
+        log_activity(f'[{account}] Auto-buy failed: {len(failed)} items', 'warning')
     return jsonify({'success': True})
+
+@seed_shop_bp.route('/api/seed-shop/status/<account>', methods=['GET'])
+def get_seed_shop_status(account):
+    status = seed_shop_status.get(account, {'bought': [], 'failed': [], 'updated_at': ''})
+    return jsonify({'status': status})
