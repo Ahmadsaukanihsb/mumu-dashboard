@@ -1,4 +1,4 @@
-import json, time
+import json, time, os
 
 from flask import Blueprint, jsonify, request
 
@@ -8,6 +8,16 @@ seed_shop_bp = Blueprint('seed_shop', __name__)
 
 seed_shop_config = {}
 seed_shop_status = {}
+
+def _load_seed_images():
+    try:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'seed_images.json')
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return {}
+
+SEED_IMAGES = _load_seed_images()
 
 SEED_LIST = [
     {"id": "bamboo", "name": "Bamboo", "price": 50, "rarity": "Uncommon"},
@@ -54,7 +64,15 @@ SEED_LIST = [
 
 @seed_shop_bp.route('/api/seed-shop/seeds', methods=['GET'])
 def get_seed_list():
-    return jsonify({'seeds': SEED_LIST})
+    # Attach image URLs from seed_images.json
+    result = []
+    for seed in SEED_LIST:
+        s = dict(seed)
+        img_data = SEED_IMAGES.get(seed['name'], {})
+        s['image'] = img_data.get('image', '')
+        s['category'] = img_data.get('category', 'other')
+        result.append(s)
+    return jsonify({'seeds': result})
 
 @seed_shop_bp.route('/api/seed-shop/config', methods=['GET'])
 def get_seed_shop_config():

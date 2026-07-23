@@ -3362,23 +3362,27 @@ function renderSeedShopList() {
     
     container.innerHTML = seedShopSeeds.map(seed => {
         const enabled = seedShopConfig[seed.id]?.enabled || false;
-        const maxQty = seedShopConfig[seed.id]?.max_qty || 10;
+        const maxQty = seedShopConfig[seed.id]?.max_qty ?? 0;
         const rarityColors = {
             'Common': 'var(--text-muted)',
             'Uncommon': 'var(--green)',
             'Rare': 'var(--blue)',
             'Epic': 'var(--purple)',
             'Legendary': 'var(--yellow)',
-            'Mythic': 'var(--red)'
+            'Mythic': 'var(--red)',
+            'Super': 'var(--accent-1)'
         };
         const color = rarityColors[seed.rarity] || 'var(--text-muted)';
-        
+
         return `
         <div style="padding:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                <div>
-                    <span style="font-weight:600;font-size:13px">${esc(seed.name)}</span>
-                    <span style="font-size:10px;color:${color};margin-left:6px">${seed.rarity}</span>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <img src="${seed.image || '/static/icons/seed-placeholder.svg'}" alt="${esc(seed.name)}" style="width:32px;height:32px;border-radius:6px;object-fit:contain;background:var(--bg-input)" onerror="this.style.display='none'">
+                    <div>
+                        <span style="font-weight:600;font-size:13px">${esc(seed.name)}</span>
+                        <span style="font-size:10px;color:${color};margin-left:6px">${seed.rarity}</span>
+                    </div>
                 </div>
                 <label class="toggle" style="margin:0">
                     <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleSeedConfig('${seed.id}', this.checked)">
@@ -3389,9 +3393,11 @@ function renderSeedShopList() {
                 <span>Price: ${seed.price}</span>
                 <span>|</span>
                 <span>Max Qty:</span>
-                <input type="number" class="input" value="${maxQty}" min="1" max="100" 
-                    style="width:60px;padding:2px 6px;font-size:11px" 
-                    onchange="updateSeedMaxQty('${seed.id}', this.value)">
+                <input type="number" class="input" value="${maxQty}" min="0" max="999"
+                    style="width:60px;padding:2px 6px;font-size:11px"
+                    onchange="updateSeedMaxQty('${seed.id}', this.value)"
+                    title="0 = beli semua stock yang tersedia">
+                <span style="font-size:10px;color:var(--text-muted)">(0=all)</span>
             </div>
         </div>`;
     }).join('');

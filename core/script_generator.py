@@ -555,15 +555,21 @@ task.spawn(function()
                         end
 
                         if availableQty > 0 then
-                            local maxQty = seedConfig.max_qty or 10
-                            local buyQty = math.min(maxQty, availableQty)
+                            -- max_qty = 0 means "buy all available stock"
+                            local maxQty = seedConfig.max_qty or 0
+                            local buyQty
+                            if maxQty <= 0 then
+                                buyQty = availableQty  -- buy ALL stock
+                            else
+                                buyQty = math.min(maxQty, availableQty)
+                            end
 
                             local ok, err = pcall(function()
                                 networking.SeedShop.PurchaseSeed:Fire(gameName, buyQty)
                             end)
 
                             if ok then
-                                table.insert(bought, {{name = gameName, count = buyQty, cost = seedConfig.max_qty}})
+                                table.insert(bought, {{name = gameName, count = buyQty, stock = availableQty}})
                                 notify("Bought " .. buyQty .. "x " .. gameName, 5)
                             else
                                 table.insert(failed, {{name = gameName, reason = tostring(err)}})
