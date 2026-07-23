@@ -2198,25 +2198,39 @@ async function loadDeltaKeys() {
 async function loadDeltaLogs() {
     const container = document.getElementById('deltaLogsContainer');
     if (!container) return;
-    const res = await api('GET', '/api/remote/delta-logs?limit=50');
+    const res = await api('GET', '/api/remote/delta-logs?limit=80');
     if (!res || !res.logs || !res.logs.length) {
         container.innerHTML = '<div class="empty-state"><i class="fas fa-history"></i> No logs yet</div>';
         return;
     }
-    container.innerHTML = '<table class="table table-fullwidth" style="font-size:11px"><thead><tr><th>Time</th><th>Device</th><th>Account</th><th>Status</th><th>Key</th><th>Message</th></tr></thead><tbody>' +
+    const stepLabels = {
+        'extract': '<i class="fas fa-search"></i> Extract',
+        'capture_url': '<i class="fas fa-link"></i> Capture URL',
+        'bypass': '<i class="fas fa-unlock"></i> Bypass',
+        'inject': '<i class="fas fa-syringe"></i> Inject',
+        'receive': '<i class="fas fa-hand-pointer"></i> Receive',
+        'queue': '<i class="fas fa-clock"></i> Queue'
+    };
+    container.innerHTML = '<table class="table table-fullwidth" style="font-size:11px"><thead><tr><th>Time</th><th>Device</th><th>Account</th><th>Step</th><th>Status</th><th>Key</th><th>Message</th></tr></thead><tbody>' +
         res.logs.map(l => {
-            const t = l.time ? new Date(l.time * 1000).toLocaleTimeString('id-ID', { hour12: false }) : '?';
+            let t = '?';
+            if (typeof l.time === 'number') {
+                t = new Date(l.time * 1000).toLocaleTimeString('id-ID', { hour12: false });
+            } else if (l.time) {
+                t = String(l.time).split(' ')[1] || l.time;
+            }
             let statusIcon = '';
             if (l.status === 'success') statusIcon = '<span style="color:var(--green)"><i class="fas fa-check-circle"></i></span>';
-            else if (l.status === 'injected') statusIcon = '<span style="color:var(--green)"><i class="fas fa-syringe"></i></span>';
-            else if (l.status === 'inject_failed') statusIcon = '<span style="color:var(--red)"><i class="fas fa-times-circle"></i></span>';
+            else if (l.status === 'info') statusIcon = '<span style="color:var(--blue)"><i class="fas fa-info-circle"></i></span>';
             else if (l.status === 'redirect') statusIcon = '<span style="color:var(--yellow)"><i class="fas fa-external-link-alt"></i></span>';
             else statusIcon = '<span style="color:var(--red)"><i class="fas fa-times-circle"></i></span>';
+            const step = stepLabels[l.step] || esc(l.step || '-');
             return `<tr>
                 <td style="white-space:nowrap">${esc(t)}</td>
-                <td style="font-family:var(--font-mono);font-size:10px">${esc(l.device_id || '')}</td>
-                <td>${esc(l.account || '')}</td>
-                <td>${statusIcon} <span style="font-size:10px">${esc(l.status)}</span></td>
+                <td style="font-family:var(--font-mono);font-size:10px">${esc(l.device_id || '-')}</td>
+                <td>${esc(l.account || '-')}</td>
+                <td style="font-size:10px">${step}</td>
+                <td>${statusIcon}</td>
                 <td style="font-family:var(--font-mono);font-size:10px">${esc(l.key_preview || '')}</td>
                 <td style="color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(l.message || '')}</td>
             </tr>`;

@@ -1,11 +1,42 @@
 import re, time, json, urllib.request, urllib.error, urllib.parse, threading
 
 from models import accounts, settings, _data_lock, log_account, log_activity, save_data, get_package_name
+from core.state import delta_logs
 from services.adb import find_adb, _adb_run, adb_connect, get_serial
 from config import IS_ARM
 
 _delta_lock = threading.Lock()
 delta_key_store = {}
+
+
+def log_delta_event(device_id, package, account, step, status, message='', key=''):
+    """Catat event delta key ke store terpusat (persisten di data.json).
+
+    step: 'capture_url', 'bypass', 'inject', 'receive', 'queue', 'extract'
+    status: 'success', 'failed', 'info', 'redirect'
+    """
+    entry = {
+        'time': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'ts': time.time(),
+        'device_id': device_id or '-',
+        'package': package or '-',
+        'account': account or '-',
+        'step': step,
+        'status': status,
+        'message': message[:200],
+        'key_preview': (key[:12] + '...') if key else ''
+    }
+    with _delta_lock:
+        delta_logs.append(entry)
+        if len(delta_logs) > 300:
+            delta_logs[:] = delta_logs[-300:]
+    return entry
+
+
+def get_delta_logs(limit=100):
+    """Ambil delta logs terbaru (terbalik kronologis)."""
+    with _delta_lock:
+        return list(reversed(delta_logs))[:limit]
 
 # Whitelist domains allowed for bypass (prevents SSRF)
 _BYPASS_ALLOWED_DOMAINS = {
@@ -444,7 +475,7 @@ def delta_inject_key(serial, key, package='com.roblox.client'):
     except:
         return False
 
-def delta_auto_get_key(serial, package='com.roblox.client'):
+def delta_auto_get_key(serial, package='com.roblox.client', device_id=''):
     try:
         adb = find_adb()
         if not adb:
@@ -454,6 +485,8 @@ def delta_auto_get_key(serial, package='com.roblox.client'):
         existing_key = delta_extract_key_from_ui(serial)
         if existing_key:
             print(f'[DELTA] Key already filled in UI: {existing_key[:20]}...')
+            log_delta_event(device_id, package, '', 'extract', 'success',
+                          'Key sudah terisi di Delta UI', existing_key)
             # Tap "Receive Key" to activate it
             receive_pt = delta_find_button(serial, 'Receive Key')
             if not receive_pt:
@@ -465,7 +498,15 @@ def delta_auto_get_key(serial, package='com.roblox.client'):
                     serial=serial, capture_output=True, timeout=5)
                 time.sleep(2)
                 print(f'[DELTA] Tapped Receive Key at {receive_pt}')
+                log_delta_event(device_id, package, '', 'receive', 'success',
+                              f'Tapped Receive Key @ {receive_pt}')
+            else:
+                log_delta_event(device_id, package, '', 'receive', 'failed',
+                              'Tombol Receive Key tidak ditemukan')
             return existing_key, None
+
+        log_delta_event(device_id, package, '', 'extract', 'info',
+                      'Key belum terisi, mulai bypass flow')
 
         # STEP 2: No key filled — do full bypass flow
         disp_w, disp_h = 960, 540
@@ -549,11 +590,17 @@ def delta_auto_get_key(serial, package='com.roblox.client'):
                     break
 
         if not url:
+            log_delta_event(device_id, package, '', 'capture_url', 'failed',
+                          'Gagal capture URL key dari logcat/dumpsys')
             return None, 'Gagal capture URL key'
 
         print(f'[DELTA] URL captured via method: {url[:120]}...')
+        log_delta_event(device_id, package, '', 'capture_url', 'success',
+                      f'URL: {url[:100]}')
 
         if not _is_allowed_bypass_url(url):
+            log_delta_event(device_id, package, '', 'capture_url', 'failed',
+                          f'URL rejected (whitelist): {url[:80]}')
             return None, f'URL rejected (not in bypass whitelist): {url[:80]}'
 
         _adb_run([adb, '-s', serial, 'shell', 'am', 'force-stop', 'com.android.chrome'],
@@ -567,12 +614,21 @@ def delta_auto_get_key(serial, package='com.roblox.client'):
             key = delta_bypass_via_playwright_lootlabs(url)
             if key:
                 print(f'[DELTA] Key found via Playwright: {key[:20]}...')
+                log_delta_event(device_id, package, '', 'bypass', 'success',
+                              'Key diperoleh via bypass', key)
                 ok = delta_inject_key(serial, key)
                 if not ok:
+                    log_delta_event(device_id, package, '', 'inject', 'failed',
+                                  'Gagal inject key ke Delta UI')
                     return None, 'Gagal inject key ke Delta'
+                log_delta_event(device_id, package, '', 'inject', 'success',
+                              'Key di-inject ke Delta UI', key)
                 return key, None
+            log_delta_event(device_id, package, '', 'bypass', 'failed',
+                          'Playwright bypass tidak menghasilkan key')
         except Exception as e:
             print(f'[DELTA] Playwright error: {e}')
+            log_delta_event(device_id, package, '', 'bypass', 'failed', f'Error: {str(e)[:100]}')
 
         import webbrowser
         try:
@@ -602,18 +658,30 @@ def delta_set_stored_key(acc_id, key):
 
 def delta_refresh_key_for_acc(acc):
     acc_id = acc.get('id', '')
+    acc_name = acc.get('name', '?')
+    device_id = acc.get('device_id', '') or f"vm{acc.get('mumu_instance', 0)}"
     instance = acc.get('mumu_instance', 0)
     package = acc.get('package_name', get_package_name(instance))
     serial = get_serial(instance)
     if not serial:
+        log_delta_event(device_id, package, acc_name, 'queue', 'failed', 'No serial')
         return {'success': False, 'error': 'No serial'}
     ok, msg = adb_connect(serial)
     if not ok:
+        log_delta_event(device_id, package, acc_name, 'queue', 'failed', f'ADB: {msg}')
         return {'success': False, 'error': f'ADB: {msg}'}
-    key, err = delta_auto_get_key(serial, package)
+    key, err = delta_auto_get_key(serial, package, device_id)
     if err:
+        log_delta_event(device_id, package, acc_name, 'queue', 'failed', err)
         return {'success': False, 'error': err}
     delta_set_stored_key(acc_id, key)
+    # Tag the most recent log entries with this account name
+    with _delta_lock:
+        for entry in reversed(delta_logs[-10:]):
+            if entry.get('account') in ('', '-') and entry.get('package') == package:
+                entry['account'] = acc_name
+    log_delta_event(device_id, package, acc_name, 'queue', 'success',
+                  'Key refreshed dan disimpan (22 jam)', key)
     return {'success': True, 'key_preview': key[:10] + '...'}
 
 def get_active_delta_keys_count():

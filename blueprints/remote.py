@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from models import accounts, servers, settings, _data_lock, save_data, encrypt_cookie, log_activity, log_account
 from services.webhook import send_webhook
-from services.delta import delta_key_store, _delta_lock
+from services.delta import delta_key_store, _delta_lock, log_delta_event, get_delta_logs
 
 remote_bp = Blueprint('remote', __name__)
 
@@ -384,36 +384,18 @@ def remote_delta_key_bypass():
         acc = next((a for a in accounts if a.get('device_id') == device_id and a.get('package_name') == package), None)
 
     result = delta_bypass_url(url)
-    log_entry = {
-        'time': time.time(),
-        'device_id': device_id or '?',
-        'package': package or '?',
-        'account': acc.get('name', '?') if acc else '?',
-        'url': url[:120],
-        'status': 'failed',
-        'message': 'Bypass failed',
-        'key_preview': ''
-    }
     # delta_bypass_url returns a key string or None (not a dict)
     if result and isinstance(result, str) and result != 'KEY_NOT_FOUND':
         key = result
-        log_entry['status'] = 'success'
-        log_entry['message'] = 'Key obtained'
-        log_entry['key_preview'] = key[:12] + '...'
         if acc:
             from services.delta import delta_set_stored_key
             delta_set_stored_key(acc['id'], key)
-            log_entry['account'] = acc.get('name', '?')
             log_activity(f'[Delta Key] Bypass success for {acc["name"]} ({package})')
-        with _delta_log_lock:
-            delta_bypass_logs.append(log_entry)
-            if len(delta_bypass_logs) > 200:
-                delta_bypass_logs[:] = delta_bypass_logs[-200:]
+        log_delta_event(device_id, package, acc.get('name', '?') if acc else '?',
+                        'bypass', 'success', f'Key obtained (url: {url[:60]})', key)
         return jsonify({'key': key, 'stored': bool(acc)})
-    with _delta_log_lock:
-        delta_bypass_logs.append(log_entry)
-        if len(delta_bypass_logs) > 200:
-            delta_bypass_logs[:] = delta_bypass_logs[-200:]
+    log_delta_event(device_id, package, acc.get('name', '?') if acc else '?',
+                    'bypass', 'failed', f'Bypass failed (url: {url[:60]})')
     return jsonify({'error': 'Bypass failed'}), 400
 
 
@@ -438,6 +420,8 @@ def remote_delta_key_queue(device_id, package):
         mailbox_commands.append(command)
         mailbox_results[cmd_id] = {'status': 'pending', 'message': 'Menunggu remote monitor...'}
     log_activity(f'Delta key queued: {package} on {device_id}')
+    log_delta_event(device_id, package, acc.get('name', '?') if acc else package,
+                    'queue', 'info', 'Delta key command queued ke remote monitor')
     return jsonify({'success': True, 'command_id': cmd_id, 'message': f'Delta key queued for {package}'})
 
 
@@ -472,8 +456,7 @@ def remote_delta_keys():
 @remote_bp.route('/api/remote/delta-logs', methods=['GET'])
 def remote_delta_logs():
     limit = request.args.get('limit', 50, type=int)
-    with _delta_log_lock:
-        logs = list(reversed(delta_bypass_logs))[:limit]
+    logs = get_delta_logs(limit)
     return jsonify({'logs': logs, 'count': len(logs)})
 
 
@@ -487,20 +470,10 @@ def remote_delta_key_report(device_id, package):
     message = data.get('message', '')
     key_preview = data.get('key_preview', '')
     acc = next((a for a in accounts if a.get('device_id') == device_id and a.get('package_name') == package), None)
-    log_entry = {
-        'time': time.time(),
-        'device_id': device_id,
-        'package': package,
-        'account': acc.get('name', '?') if acc else '?',
-        'url': '',
-        'status': 'injected' if success else 'inject_failed',
-        'message': message or ('Key injected' if success else 'Injection failed'),
-        'key_preview': key_preview
-    }
-    with _delta_log_lock:
-        delta_bypass_logs.append(log_entry)
-        if len(delta_bypass_logs) > 200:
-            delta_bypass_logs[:] = delta_bypass_logs[-200:]
+    log_delta_event(device_id, package, acc.get('name', '?') if acc else '?',
+                    'inject', 'success' if success else 'failed',
+                    message or ('Key injected' if success else 'Injection failed'),
+                    key_preview.replace('...', '') if key_preview else '')
     if success and acc:
         log_activity(f'[Delta Key] Injected for {acc["name"]} ({package})')
     elif not success and acc:

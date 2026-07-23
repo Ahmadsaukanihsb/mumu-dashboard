@@ -26,6 +26,7 @@ settings = {
 
 schedules = []
 schedule_history = []
+delta_logs = []
 
 activity_log = []
 acc_logs = {}
