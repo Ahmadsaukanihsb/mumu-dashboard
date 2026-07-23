@@ -8,7 +8,7 @@ def debug(*args):
     sys.stderr.flush()
 
 from models import accounts, servers, settings, monitor_state, _data_lock, _join_threads, _join_threads_lock, _join_timestamps, user_shutdown_instances, log_account, log_activity, save_data, get_package_name, decrypt_cookie
-from services.adb import get_serial, adb_connect, adb_check_roblox, adb_get_thread_count, adb_dismiss_dialogs, adb_check_in_game, adb_detect_kicked_dialog, adb_force_stop_roblox, adb_check_in_foreground, adb_check_network_active
+from services.adb import get_serial, adb_connect, adb_check_roblox, adb_get_thread_count, adb_dismiss_dialogs, adb_check_in_game, adb_detect_kicked_dialog, adb_force_stop_roblox, adb_check_in_foreground, adb_check_network_active, adb_check_udp_active
 from services.mumu import ensure_vm_running, launch_mumu, send_join_intent
 from services.roblox import verify_cookie, build_public_link
 from services.webhook import send_webhook
@@ -111,6 +111,7 @@ def monitor_loop():
                     tc = adb_get_thread_count(serial, package)
                     foreground = adb_check_in_foreground(serial, package)
                     network = adb_check_network_active(serial, package)
+                    udp_active = adb_check_udp_active(serial, package)
 
                     if tc is not None:
                         with _data_lock:
@@ -123,6 +124,18 @@ def monitor_loop():
                             if ui_check is True:
                                 in_game = True
                                 foreground = True
+
+                        # HYSTERESIS: prevent false "home screen" when tc drops slightly below threshold
+                        # but UDP is still active (Roblox still connected to game server)
+                        if not in_game and was_in_game and udp_active is True and tc >= (threshold - 15):
+                            in_game = True
+                            debug(acc.get("name","?"), f'hysteresis: tc={tc} < {threshold} but UDP active, still in-game')
+
+                        # UDP-only detection: if thread count unreliable but UDP is very active, likely in-game
+                        if not in_game and udp_active is True and tc >= 50:
+                            in_game = True
+                            debug(acc.get("name","?"), f'udp-based detection: tc={tc}, UDP active, in-game')
+
                         game_start = st.get('in_game_since', 0)
                         if in_game and game_start == 0:
                             st['in_game_since'] = now
@@ -178,20 +191,20 @@ def monitor_loop():
                         if in_game:
                             if not was_in_game and not st.get('in_game_notified', False):
                                 st['in_game_notified'] = True
-                                log_account(acc_id, acc['name'], f'in-game detected (tc={tc}, fg={foreground}, net={network})')
+                                log_account(acc_id, acc['name'], f'in-game detected (tc={tc}, fg={foreground}, net={network}, udp={udp_active})')
                                 send_webhook(f'✅ {acc["name"]} — In Game', f'Account berhasil masuk ke game\n**Package:** {package}\n**TC:** {tc}', 0x43e97b, acc.get('verified_avatar'))
                             st['in_game'] = True
                         elif was_in_game:
                             st['in_game_notified'] = False
                             if should_join(st):
-                                log_account(acc_id, acc['name'], f'home screen (threads={tc}, fg={foreground}), rejoining...')
+                                log_account(acc_id, acc['name'], f'home screen (threads={tc}, fg={foreground}, udp={udp_active}), rejoining...')
                                 send_join_intent(acc, serial)
                                 st['last_intent'] = time.time()
                             st['in_game'] = False
                         else:
                             last_rejoin = st.get('last_intent', 0)
                             if now - last_rejoin >= JOIN_COOLDOWN:
-                                log_account(acc_id, acc['name'], f'still home (threads={tc}), rejoining...')
+                                log_account(acc_id, acc['name'], f'still home (threads={tc}, udp={udp_active}), rejoining...')
                                 send_join_intent(acc, serial)
                                 st['last_intent'] = time.time()
 

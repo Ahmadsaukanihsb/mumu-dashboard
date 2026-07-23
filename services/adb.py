@@ -312,6 +312,26 @@ def adb_check_network_active(serial, package='com.roblox.client'):
         return len(established) > 2
     return False
 
+
+def adb_check_udp_active(serial, package='com.roblox.client'):
+    """Check if the app has active UDP connections (Roblox game traffic uses UDP).
+
+    This is the most reliable in-game indicator: if Roblox is connected to a game
+    server, there WILL be UDP packets flowing. Home screen / lobby may drop to
+    minimal UDP. Returns True/False, or None if PID not found.
+    """
+    pid = adb_get_pid(serial, package)
+    if not pid:
+        return None
+    total = 0
+    for f in ('udp', 'udp6'):
+        code, out = adb_cmd(['shell', 'cat', f'/proc/{pid}/net/{f}'], serial)
+        if code == 0 and out:
+            # Lines with state 01 (UDP_ESTABLISHED) or 07 (UDP_CLOSE not counted)
+            lines = [l for l in out.split('\n') if ' 01 ' in l]
+            total += len(lines)
+    return total > 0
+
 def auto_push_script_to_vm(acc, serial):
     from blueprints.misc import make_script_for
     from models import settings, log_account as _log_account

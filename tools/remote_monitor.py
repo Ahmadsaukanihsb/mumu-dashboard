@@ -146,6 +146,23 @@ class RootMonitor:
                 return None
         return None
 
+    def check_udp_active(self, package='com.roblox.client'):
+        """Check if app has active UDP connections (Roblox game traffic uses UDP).
+
+        Most reliable in-game indicator: if Roblox is connected to a game server,
+        UDP packets will be flowing. Returns True/False, None if PID not found.
+        """
+        pid = self.get_pid(package)
+        if not pid:
+            return None
+        total = 0
+        for f in ('udp', 'udp6'):
+            code, out = self.su_cmd(f'cat /proc/{pid}/net/{f}')
+            if code == 0 and out:
+                lines = [l for l in out.split('\n') if ' 01 ' in l]
+                total += len(lines)
+        return total > 0
+
     def dismiss_dialogs(self):
         for _ in range(3):
             self.su_cmd('input keyevent KEYCODE_BACK')
@@ -760,6 +777,7 @@ class RootMonitor:
                     tc = self.get_thread_count(pkg)
                     kicked = self.detect_kicked(pkg)
                     in_game_ui = self.check_in_game(pkg)
+                    udp_active = self.check_udp_active(pkg)
 
                     last = self._last_rejoin.get(pkg, 0)
                     if now - last < 60 and tc is not None and tc < thread_threshold:
@@ -780,14 +798,26 @@ class RootMonitor:
                             print(f'[{account_name}] → NO JOIN LINK!')
                         continue
 
-                    # In-game detection: thread count OR UI check
+                    # In-game detection: thread count OR UI check OR UDP active
                     is_in_game = (tc is not None and tc >= thread_threshold) or in_game_ui is True
+
+                    # HYSTERESIS: prevent false "home screen" when tc drops slightly below threshold
+                    # but UDP is still active (Roblox still connected to game server)
+                    if not is_in_game and udp_active is True and tc is not None and tc >= (thread_threshold - 15):
+                        is_in_game = True
+                        print(f'[{account_name}] HYSTERESIS: tc={tc} < {thread_threshold} but UDP active, still in-game')
+
+                    # UDP-only detection: if thread count unreliable but UDP is very active, likely in-game
+                    if not is_in_game and udp_active is True and tc is not None and tc >= 50:
+                        is_in_game = True
+                        print(f'[{account_name}] UDP-DETECT: tc={tc}, UDP active, in-game')
+
                     if is_in_game:
-                        print(f'[{account_name}] IN-GAME (tc={tc}, ui={in_game_ui})')
+                        print(f'[{account_name}] IN-GAME (tc={tc}, ui={in_game_ui}, udp={udp_active})')
                         self.report_status(account_name, pkg, 'in_game', tc=tc)
                         self._last_rejoin[pkg] = now
                     elif tc is not None:
-                        print(f'[{account_name}] HOME SCREEN (tc={tc}, ui={in_game_ui})')
+                        print(f'[{account_name}] HOME SCREEN (tc={tc}, ui={in_game_ui}, udp={udp_active})')
                         self.report_status(account_name, pkg, 'monitoring', tc=tc)
                         last = self._last_rejoin.get(pkg, 0)
                         if now - last >= 60:
@@ -800,7 +830,7 @@ class RootMonitor:
                             if tc < 10:
                                 self.dismiss_dialogs()
                     else:
-                        print(f'[{account_name}] RUNNING (tc=unknown, ui={in_game_ui})')
+                        print(f'[{account_name}] RUNNING (tc=unknown, ui={in_game_ui}, udp={udp_active})')
                         self.report_status(account_name, pkg, 'monitoring', tc=None)
                         last = self._last_rejoin.get(pkg, 0)
                         if now - last >= 60:
