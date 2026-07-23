@@ -82,6 +82,17 @@ def load_data():
 def save_data():
     with _data_lock:
         import shutil
+        # SAFETY: jangan save jika accounts kosong tapi data.json punya data
+        # Ini mencegah overwrite data.json dengan data kosong saat race condition
+        if not accounts:
+            try:
+                with open(DATA_FILE, 'r') as f:
+                    existing = json.load(f)
+                if existing.get('accounts'):
+                    print('[SAVE] SKIP save - accounts kosong tapi file punya data! Race condition detected.')
+                    return
+            except:
+                pass
         if os.path.exists(DATA_FILE):
             if os.path.exists(DATA_FILE + '.bak'):
                 try:
