@@ -394,8 +394,9 @@ def remote_delta_key_bypass():
         'message': 'Bypass failed',
         'key_preview': ''
     }
-    if result and result.get('key'):
-        key = result['key']
+    # delta_bypass_url returns a key string or None (not a dict)
+    if result and isinstance(result, str) and result != 'KEY_NOT_FOUND':
+        key = result
         log_entry['status'] = 'success'
         log_entry['message'] = 'Key obtained'
         log_entry['key_preview'] = key[:12] + '...'
@@ -409,14 +410,6 @@ def remote_delta_key_bypass():
             if len(delta_bypass_logs) > 200:
                 delta_bypass_logs[:] = delta_bypass_logs[-200:]
         return jsonify({'key': key, 'stored': bool(acc)})
-    if result and result.get('redirect'):
-        log_entry['status'] = 'redirect'
-        log_entry['message'] = f'Redirect: {result["redirect"][:80]}'
-        with _delta_log_lock:
-            delta_bypass_logs.append(log_entry)
-            if len(delta_bypass_logs) > 200:
-                delta_bypass_logs[:] = delta_bypass_logs[-200:]
-        return jsonify({'redirect': result['redirect']})
     with _delta_log_lock:
         delta_bypass_logs.append(log_entry)
         if len(delta_bypass_logs) > 200:
