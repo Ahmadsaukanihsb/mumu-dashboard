@@ -347,6 +347,54 @@ def delta_find_button(serial, label):
         pass
     return None
 
+
+def delta_extract_key_from_ui(serial):
+    """Extract key that is already filled in the Delta key input field.
+
+    Returns the key string if found (25-50 chars, uppercase/digits/dash/underscore),
+    or None if field is empty or key not valid.
+    """
+    adb = find_adb()
+    if not adb: return None
+    try:
+        _adb_run([adb, '-s', serial, 'shell', 'uiautomator', 'dump', '--compressed', '/data/local/tmp/delta_key.xml'],
+            serial=serial, capture_output=True, timeout=15)
+        r = _adb_run([adb, '-s', serial, 'shell', 'cat', '/data/local/tmp/delta_key.xml 2>/dev/null || echo empty'],
+            serial=serial, capture_output=True, text=True, timeout=10)
+        _adb_run([adb, '-s', serial, 'shell', 'rm', '-f', '/data/local/tmp/delta_key.xml'],
+            serial=serial, capture_output=True, timeout=5)
+
+        # Look for EditText fields (key input)
+        for node in re.finditer(r'<node\s+([^>]+?)/?\s*>', r.stdout):
+            attrs = node.group(1)
+            cls = re.search(r'class="([^"]*)"', attrs)
+            text = re.search(r'text="([^"]*)"', attrs)
+            if not text:
+                continue
+            txt = text.group(1).strip()
+            # Check if it's an EditText with key-like content
+            if cls and 'EditText' in cls.group(1):
+                # Key pattern: 25-50 chars, uppercase letters, digits, dash, underscore
+                m = re.search(r'[A-Z0-9_\-]{25,50}', txt)
+                if m and 'key' not in txt.lower() and 'enter' not in txt.lower():
+                    return m.group(0)
+            # Also check any text field that looks like a key
+            if re.match(r'^[A-Z0-9_\-]{25,50}$', txt):
+                return txt
+
+        # Fallback: find any long uppercase string in the UI
+        for node in re.finditer(r'<node\s+([^>]+?)/?\s*>', r.stdout):
+            attrs = node.group(1)
+            text = re.search(r'text="([^"]*)"', attrs)
+            if not text:
+                continue
+            txt = text.group(1).strip()
+            if re.match(r'^[A-Z0-9_\-]{25,50}$', txt):
+                return txt
+    except Exception as e:
+        print(f'[DELTA] extract_key error: {e}')
+    return None
+
 def _escape_for_adb_input(text):
     """Escape special characters for ADB 'input text' command."""
     return (text.replace('%', '%25')
@@ -380,7 +428,13 @@ def delta_inject_key(serial, key, package='com.roblox.client'):
             _adb_run([adb, '-s', serial, 'shell', 'input', 'text', escaped[20:]],
                 serial=serial, capture_output=True, timeout=5)
         time.sleep(1)
-        verify_pt = delta_find_button(serial, 'VERIFY')
+        verify_pt = delta_find_button(serial, 'Receive Key')
+        if not verify_pt:
+            verify_pt = delta_find_button(serial, 'RECEIVE')
+        if not verify_pt:
+            verify_pt = delta_find_button(serial, 'Receive')
+        if not verify_pt:
+            verify_pt = delta_find_button(serial, 'VERIFY')
         if not verify_pt:
             verify_pt = delta_find_button(serial, 'SUBMIT')
         if verify_pt:
@@ -396,6 +450,24 @@ def delta_auto_get_key(serial, package='com.roblox.client'):
         if not adb:
             return None, 'ADB not found'
 
+        # STEP 1: Check if key is already filled in Delta UI (no bypass needed)
+        existing_key = delta_extract_key_from_ui(serial)
+        if existing_key:
+            print(f'[DELTA] Key already filled in UI: {existing_key[:20]}...')
+            # Tap "Receive Key" to activate it
+            receive_pt = delta_find_button(serial, 'Receive Key')
+            if not receive_pt:
+                receive_pt = delta_find_button(serial, 'RECEIVE')
+            if not receive_pt:
+                receive_pt = delta_find_button(serial, 'Receive')
+            if receive_pt:
+                _adb_run([adb, '-s', serial, 'shell', 'input', 'tap', str(receive_pt[0]), str(receive_pt[1])],
+                    serial=serial, capture_output=True, timeout=5)
+                time.sleep(2)
+                print(f'[DELTA] Tapped Receive Key at {receive_pt}')
+            return existing_key, None
+
+        # STEP 2: No key filled — do full bypass flow
         disp_w, disp_h = 960, 540
         try:
             r = _adb_run([adb, '-s', serial, 'shell', 'wm', 'size'],
@@ -487,7 +559,7 @@ def delta_auto_get_key(serial, package='com.roblox.client'):
         _adb_run([adb, '-s', serial, 'shell', 'am', 'force-stop', 'com.android.chrome'],
             serial=serial, capture_output=True, timeout=5)
         time.sleep(1)
-        _adb_run([adb, '-s', serial, 'shell', 'monkey', '-p', 'com.roblox.client', '1'],
+        _adb_run([adb, '-s', serial, 'shell', 'monkey', '-p', package, '1'],
             serial=serial, capture_output=True, timeout=5)
 
         print(f'[DELTA] Auto-bypassing via Playwright...')
